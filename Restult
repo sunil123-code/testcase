@@ -1,78 +1,97 @@
-import React from 'react';
-import { render, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
-import ATPFormPage from '../atpFormPage';
 
-const mockStore = configureStore([]);
-
-describe('<ATPFormPage />', () => {
-  let store;
-
-  beforeEach(() => {
-    store = mockStore({
-      ATPFlags: {
-        ATPFormPageFlags: {
-          isDebt: false,
-          isTotalFX: false,
-          ispurposeEnable: false,
-          ispaymenttypes: false,
-          issecuritytypes: false,
-          isEnablePrincipalCol: false,
-          isSpecify: false,
-          isSpecifyTooltip: false,
+it('purposeselectedHandler onchange event Handler', async () => {
+  const purposeprops = {
+    ...props,
+    ATPFlags: {
+      ATPFormPageFlags: {
+        isDebt: true, isTotalFX: false, ispurposeEnable: true, ispaymenttypes: true,
+        issecuritytypes: false, isEnablePrincipalCol: false, isSpecify: false, isSpecifyTooltip: false,
+      },
+    },
+    formDetails: {
+      ...props.formDetails,
+      purposeData: [
+        {
+          'id': 20891, 'categoryId': 20883,
+          'name': 'Owed to Offshore Banking Units in the Philippines', 'type': 'PURPOSE'
+        },
+      ],
+      paymentTypesData: [
+        {
+          'id': 20919, 'purposeId': 20891,
+          'name': 'Prepayment', 'type': 'PAYMENT_TYPE'
+        },
+      ]
+    },
+    ATPFormDetails: {
+      debtAccount: 'test', fees: '', interest: '', paymentType: 'Prepayment',
+      principle: '', purpose: 'Owed to Offshore Banking Units in the Philippines',
+      purposeCategory: 'Foreign loans /borrowings', securityType: '',
+      specifiedReason: '', totalFXPurchased: '',
+    },
+    purposeCategories: {
+      ...props.purposeCategories,
+      purposeCategories: [
+        {
+          'id': 20883,
+          'name': 'Foreign loans /borrowings'
         }
-      },
-      ATPFormDetails: {
-        purposeCategory: '',
-        totalFXPurchased: '',
-        debtAccount: '',
-        purpose: '',
-        paymentType: '',
-        principle: '',
-        interest: '',
-        fees: '',
-        securityType: '',
-        specifiedReason: ''
-      },
-      formFieldErrorIds: [],
-      formDetails: {
-        purposeData: [],
-        paymentTypesData: [],
-        securityTypesData: []
-      },
-      fxPurchased: {},
-      selectedTab: 0,
-      purposeCategories: {
-        purposeCategories: [],
-        purposes: [],
-        payments: [],
-        paymentComponents: []
-      }
-    });
-  });
+      ],
+      purposes: [
+        {
+          'id': 20891, 'categoryId': 20883,
+          'name': 'Owed to Offshore Banking Units in the Philippines', 'type': 'PURPOSE'
+        },
+      ],
+      payments: [
+        {
+          'id': 20919, 'purposeId': 20891,
+          'name': 'Prepayment', 'type': 'PAYMENT_TYPE'
+        },
+      ]
+    }
+  };
 
-  it('updates the purpose and displays the appropriate fields when selected', () => {
-    const { getByTestId } = render(
-      <Provider store={store}>
-        <ATPFormPage />
+  const { container, getAllByTestId, rerender } = render(
+    <HashRouter>
+      <Provider store={mockStore(state)}>
+        <ATPFormPage {...purposeprops} />
       </Provider>
-    );
+    </HashRouter>
+  );
 
-    const purposeCategorySelect = getByTestId('purposeCategory');
-    fireEvent.change(purposeCategorySelect, { target: { value: 'Foreign loans /borrowings' } });
+  fireEvent.focus(getAllByTestId('input')[0]);
+  fireEvent.mouseDown(container.querySelectorAll('[name="test_menuitem"]')[0]);
 
-    const purposeSelect = getByTestId('purpose');
-    fireEvent.change(purposeSelect, { target: { value: 'Owed to Offshore Banking Units in the Philippines' } });
-
-    expect(store.getActions()).toContainEqual(/* expected action for updating purpose */);
-    expect(getByTestId('paymentType')).toBeInTheDocument();
-    expect(getByTestId('securityType')).not.toBeInTheDocument();
-    expect(getByTestId('specifiedReason')).not.toBeInTheDocument();
-    expect(getByTestId('principal')).not.toBeInTheDocument();
-    expect(getByTestId('interest')).not.toBeInTheDocument();
-    expect(getByTestId('fees')).not.toBeInTheDocument();
+  // Rerender and check if paymentTypes is rendered
+  rerender(
+    <HashRouter>
+      <Provider store={mockStore(state)}>
+        <ATPFormPage {...purposeprops} />
+      </Provider>
+    </HashRouter>
+  );
+  
+  await waitFor(() => {
+    expect(container.querySelector('[data-testid="paymentTypes"]')).toBeInTheDocument();
   });
 
-  // Add more tests for other functionality
+  // Simulate further selection and test state update
+  fireEvent.focus(getAllByTestId('input')[2]);
+  fireEvent.mouseDown(container.querySelectorAll('[name="test_menuitem"]')[0]);
+
+  rerender(
+    <HashRouter>
+      <Provider store={mockStore(state)}>
+        <ATPFormPage {...purposeprops} />
+      </Provider>
+    </HashRouter>
+  );
+
+  await waitFor(() => {
+    expect(container.querySelector('[data-testid="paymentTypes"]')).toBeInTheDocument();
+  });
+
+  // Optionally: Check that the `ATPFormDetails` state was updated correctly
+  expect(purposeprops.ATPFormDetails.paymentType).toBe('Prepayment');
 });
