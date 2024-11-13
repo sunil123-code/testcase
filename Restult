@@ -1,0 +1,21 @@
+it('updates the purpose and displays the appropriate fields when selected', () => {
+  const { getByTestId } = render(
+    <Provider store={store}>
+      <ATPFormPage />
+    </Provider>
+  );
+
+  const purposeCategorySelect = getByTestId('purposeCategory');
+  fireEvent.change(purposeCategorySelect, { target: { value: 'Foreign loans /borrowings' } });
+
+  const purposeSelect = getByTestId('purpose');
+  fireEvent.change(purposeSelect, { target: { value: 'Owed to Offshore Banking Units in the Philippines' } });
+
+  expect(store.getActions()).toContainEqual(/* expected action for updating purpose */);
+  expect(getByTestId('paymentType')).toBeInTheDocument();
+  expect(getByTestId('securityType')).not.toBeInTheDocument();
+  expect(getByTestId('specifiedReason')).not.toBeInTheDocument();
+  expect(getByTestId('principal')).not.toBeInTheDocument();
+  expect(getByTestId('interest')).not.toBeInTheDocument();
+  expect(getByTestId('fees')).not.toBeInTheDocument();
+});
