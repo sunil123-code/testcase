@@ -1,4 +1,118 @@
 
+
+
+import { render, fireEvent } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { mockStore } from './testUtils'; // assuming you have this utility for creating a mock store
+import ATPFormPage from './ATPFormPage'; // Adjust the import according to your structure
+
+describe('ATPFormPage', () => {
+  it('should dispatch the correct actions on form field changes', () => {
+    const dispatch = jest.fn();
+    const purposeprops = {
+      ...props,
+      ATPFlags: {
+        ATPFormPageFlags: {
+          isDebt: true, isTotalFX: false, ispurposeEnable: true, ispaymenttypes: true,
+          issecuritytypes: false, isEnablePrincipalCol: false, isSpecify: false, isSpecifyTooltip: false,
+        },
+      },
+      formDetails: {
+        ...props.formDetails,
+        purposeData: [
+          {
+            'id': 20891, 'categoryId': 20883,
+            'name': 'Owed to Offshore Banking Units in the Philippines', 'type': 'PURPOSE'
+          },
+        ],
+        paymentTypesData: [
+          {
+            'id': 20919, 'purposeId': 20891,
+            'name': 'Prepayment', 'type': 'PAYMENT_TYPE'
+          },
+        ]
+      },
+      ATPFormDetails: {
+        debtAccount: 'test', fees: '', interest: '', paymentType: 'Prepayment',
+        principle: '', purpose: 'Owed to Offshore Banking Units in the Philippines',
+        purposeCategory: 'Foreign loans /borrowings', securityType: '',
+        specifiedReason: '', totalFXPurchased: '',
+      },
+      purposeCategories: {
+        ...props.purposeCategories,
+        purposeCategories: [
+          {
+            'id': 20883,
+            'name': 'Foreign loans /borrowings'
+          }
+        ],
+        purposes: [
+          {
+            'id': 20891, 'categoryId': 20883,
+            'name': 'Owed to Offshore Banking Units in the Philippines', 'type': 'PURPOSE'
+          },
+        ],
+        payments: [
+          {
+            'id': 20919, 'purposeId': 20891,
+            'name': 'Prepayment', 'type': 'PAYMENT_TYPE'
+          },
+        ]
+      },
+      dispatch, // Mock dispatch
+    };
+
+    const { container, getAllByTestId, rerender } = render(
+      <Provider store={mockStore(state)}>
+        <ATPFormPage {...purposeprops} />
+      </Provider>
+    );
+
+    // Simulate selecting a purpose
+    fireEvent.focus(getAllByTestId('input')[0]);
+    fireEvent.mouseDown(container.querySelectorAll('[name="test_menuitem"]')[0]);
+
+    // Ensure dispatch is called with the correct values
+    expect(dispatch).toHaveBeenCalledWith(changeAtpFormFieldValueTab({
+      id: selectedTab,
+      key: 'purpose',
+      type: 'purpose',
+      value: 'Owed to Offshore Banking Units in the Philippines', // The selected value
+    }));
+
+    // Simulate other input changes and check dispatch calls for other fields
+    fireEvent.focus(getAllByTestId('input')[1]);
+    fireEvent.mouseDown(container.querySelectorAll('[name="test_menuitem"]')[1]);
+    expect(dispatch).toHaveBeenCalledWith(changeAtpFormFieldValueTab({
+      id: selectedTab,
+      key: 'securityType',
+      type: 'purpose',
+      value: '', // Empty security type after selection
+    }));
+
+    fireEvent.focus(getAllByTestId('input')[2]);
+    fireEvent.mouseDown(container.querySelectorAll('[name="test_menuitem"]')[2]);
+    expect(dispatch).toHaveBeenCalledWith(changeAtpFormFieldValueTab({
+      id: selectedTab,
+      key: 'specifiedReason',
+      type: 'purpose',
+      value: '', // Empty specified reason after selection
+    }));
+
+    fireEvent.focus(getAllByTestId('input')[3]);
+    fireEvent.mouseDown(container.querySelectorAll('[name="test_menuitem"]')[3]);
+    expect(dispatch).toHaveBeenCalledWith(changeAtpFormFieldValueTab({
+      id: selectedTab,
+      key: 'paymentType',
+      type: 'purpose',
+      value: '', // Empty payment type after selection
+    }));
+
+    // Ensure that the validation logic is covered (e.g., if `value` is a string or invalid)
+    expect(dispatch).toHaveBeenCalledTimes(4); // Check if the correct number of dispatches occurred
+  });
+});
+
 it('purposeselectedHandler onchange event Handler', async () => {
   const purposeprops = {
     ...props,
