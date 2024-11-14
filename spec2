@@ -1,1 +1,14 @@
-{"trades":[{"opicsId":"25890"}],"totalNoOfAtps":1,"atps":[{"atpId":null,"referenceDocId":null,"name":"ATP 1","details":{"companyName":"Ankuding Inc","fxToBePurchased":"50,043.23","fxToBePurchasedCurrency":"USD","address":"aaaaaa","contactInfo":"aa","taxIdentificationNo":"aaaaa","governmentId":"aa","residency":"Resident","buyAmount":"50,043.23","buyCurrency":"USD"},"purpose":{"purposeCategory":"Trade (payment for importations)","totalFXPurchased":"","debtAccount":"","purpose":"","paymentType":"","principle":"","interest":"","fees":"","securityType":"","specifiedReason":""},"fxDisposition":{"type":"For Direct Remittance","accountOwner":"","accountNo":"","depository":"","eventualRemittance":""},"intendedBeneficiary":{"name":"aaaaaa","address":"aaaaaaa"}}]}
+
+  <Button
+    onClick={() => {
+      alert('I am clicked');
+    }}
+    leftIconName={'ic_plus'}
+    buttonType={'primary'}
+    disabled={false}
+    variant={'iconText'}
+    isLoading={true}
+    showContentAlways={true}
+  >
+    New Transaction
+  </Button>
