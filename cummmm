@@ -1,0 +1,92 @@
+import { createSelector } from 'reselect';
+import { tradeSelector } from '../trades';
+import {
+  detailsSectionValidator,
+  fxDispositionValidator,
+  intendedBeneficiaryValidator,
+  purposeSectionValidator,
+  supportingDocumentValidator
+} from '../../views/linkDocuments/utils/formHelper';
+import { isPreviewAndSubmitClickedOnceSelector } from '../linkDocument';
+import { addMultiAtpSelector } from '../multiATP';
+import { convertCommaStringToNumber } from '../../views/linkDocuments/utils/detailsFormHelper';
+
+export const cummulativeSelector = createSelector(
+  [tradeSelector, addMultiAtpSelector],
+  (trades, multiAtp) => {
+    return {
+      trades: trades.map((trade) => ({
+        opicsId: trade.opicsId,
+        tradeDate: trade.tradeDate,
+        valueDate: trade.valueDate,
+        sellAmount: trade.sellAmount,
+        sellCurrency: trade.sellCurrency
+      })),
+      atps: multiAtp?.atps ?? [],
+
+    };
+  },
+);
+
+export const formFieldErrorValidationSelector = createSelector(
+  [cummulativeSelector],
+  (atpFormValues) => {
+    const formErrors = atpFormValues?.atps?.map((atp) => {
+      const detailsFormErrors = detailsSectionValidator(atp?.details, atpFormValues?.atps?.length);
+      const fxDispositionErrors = fxDispositionValidator(atp?.fxDisposition);
+      const intendedBeneficiaryErrors = intendedBeneficiaryValidator(atp?.intendedBeneficiary);
+      const purposeErrors = purposeSectionValidator(atp?.purpose, atp?.ATPFormPageFlags, atp?.details?.fxToBePurchased);
+      const supportingDocumentErrors = supportingDocumentValidator(
+        atp?.supportingDocs,
+        atp?.supportingDocs?.isSubmitted,
+        atp?.logicPou?.isRequirePOU,
+      );
+      return {
+        name: atp.name,
+        atpId: atp.atpId,
+        errors: [
+          ...detailsFormErrors,
+          ...fxDispositionErrors,
+          ...intendedBeneficiaryErrors,
+          ...purposeErrors,
+          ...supportingDocumentErrors,
+        ]
+      };
+    });
+    return formErrors;
+  },
+);
+
+export const formFieldErrorIdsSelector = createSelector(
+  [formFieldErrorValidationSelector, isPreviewAndSubmitClickedOnceSelector],
+  (formErrorFields, isPreviewAndSubmitClickedOnce) => {
+    if (isPreviewAndSubmitClickedOnce) {
+      return formErrorFields;
+    }
+    return [];
+  },
+);
+
+export const buyAmountErrorValidationSelector = createSelector(
+  [cummulativeSelector, isPreviewAndSubmitClickedOnceSelector],
+  (atpFormValues, isPreviewAndSubmitClickedOnce) => {
+    if (atpFormValues?.atps?.length > 1 && isPreviewAndSubmitClickedOnce) {
+      const sumOfAtpBuyAmounts = atpFormValues?.atps?.reduce((sum, item) => {
+        return sum + (convertCommaStringToNumber(item.details.buyAmount) || 0);
+      }, 0);
+      return sumOfAtpBuyAmounts !== convertCommaStringToNumber(atpFormValues?.atps[0]?.details?.sumOfBuyAmounts);
+    }
+    return false;
+  },
+);
+
+export const isFormErrorsExistsSelector = createSelector([
+  formFieldErrorValidationSelector,
+  buyAmountErrorValidationSelector
+],
+(atpDetailsFormormErrors, isMultiAtpFxAmountMismatch) => {
+  return isMultiAtpFxAmountMismatch || atpDetailsFormormErrors.some(errorArray => {
+    return errorArray?.errors?.length;
+  });
+}
+);
