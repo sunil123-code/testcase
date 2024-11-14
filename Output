@@ -1,3 +1,23 @@
+
+
+// Helper function to convert empty strings to null in an object
+const preparePayload = (data) => {
+  const convertEmptyToNull = (obj) => {
+    if (typeof obj === 'object' && obj !== null) {
+      Object.keys(obj).forEach(key => {
+        if (obj[key] === '') {
+          obj[key] = null;
+        } else if (typeof obj[key] === 'object') {
+          convertEmptyToNull(obj[key]); // Recursively handle nested objects
+        }
+      });
+    }
+    return obj;
+  };
+  
+  return convertEmptyToNull(data);
+};
+
 export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
   if (!trades || trades.length === 0) {
     return;
@@ -6,7 +26,7 @@ export const handleDownloadATP = (configuration, trades, cumulative, preview, la
   const now = new Date();
   const timestamp = `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
 
-  const filenameReferenceNumber = preview?.atpTradeList?.[0]?.opicsId ?? trades?.[0]?.opicsId;
+  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId;
   const multiFxFileName = trades?.length > 1 ? `ATP-MultiFX-${timestamp}` : `ATP-${trades[0].opicsId}-${timestamp}`;
   const filename = preview?.atpsCollective?.length > 1 ? `ATP-${filenameReferenceNumber}-1-${timestamp}` : multiFxFileName;
 
@@ -24,61 +44,43 @@ export const handleDownloadATP = (configuration, trades, cumulative, preview, la
     atp = cumulative.atps[0];
     totalAtps = cumulative.atps.length;
   } else {
-    atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective?.find(item => item.name === label);
+    atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective.filter(item => item.name === label)[0];
     totalAtps = preview?.atpsCollective?.length;
   }
 
-  const assignNullIfEmpty = (value) => (value === undefined || value === null || value === "" ? null : value);
-
+  // Construct the ATP data payload
   const atpData = {
     trades: atpTradeList.map(trade => ({ opicsId: trade.opicsId })),
     totalNoOfAtps: totalAtps,
     atps: [{
-      atpId: assignNullIfEmpty(cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId),
-      referenceDocId: assignNullIfEmpty(atp?.referenceDocId),
-      name: assignNullIfEmpty(atp?.name) || 'ATP 1',
+      atpId: cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId,
+      referenceDocId: atp?.referenceDocId || null,
+      name: atp?.name || 'ATP 1',
       details: {
-        companyName: assignNullIfEmpty(atp?.details?.companyName),
-        fxToBePurchased: assignNullIfEmpty(atp?.details?.fxToBePurchased),
-        fxToBePurchasedCurrency: assignNullIfEmpty(atp?.details?.fxToBePurchasedCurrency),
-        address: assignNullIfEmpty(atp?.details?.address),
-        contactInfo: assignNullIfEmpty(atp?.details?.contactInfo),
-        taxIdentificationNo: assignNullIfEmpty(atp?.details?.taxIdentificationNo),
-        governmentId: assignNullIfEmpty(atp?.details?.governmentId),
-        residency: assignNullIfEmpty(atp?.details?.residency),
-        buyAmount: assignNullIfEmpty(atp?.details?.buyAmount),
-        buyCurrency: assignNullIfEmpty(atp?.details?.buyCurrency)
+        ...atp?.details,
+        contactInfo: atp?.details?.contactInfo,
       },
       purpose: {
-        purposeCategory: assignNullIfEmpty(atp?.purpose?.purposeCategory),
-        totalFXPurchased: assignNullIfEmpty(atp?.purpose?.totalFXPurchased),
-        debtAccount: assignNullIfEmpty(atp?.purpose?.debtAccount),
-        purpose: assignNullIfEmpty(atp?.purpose?.purpose),
-        paymentType: assignNullIfEmpty(atp?.purpose?.paymentType),
-        principle: assignNullIfEmpty(atp?.purpose?.principle),
-        interest: assignNullIfEmpty(atp?.purpose?.interest),
-        fees: assignNullIfEmpty(atp?.purpose?.fees),
-        securityType: assignNullIfEmpty(atp?.purpose?.securityType),
-        specifiedReason: assignNullIfEmpty(atp?.purpose?.specifiedReason)
+        ...atp?.purpose,
+        principle: atp?.purpose?.principle,
       },
       fxDisposition: {
-        type: assignNullIfEmpty(atp?.fxDisposition?.type),
-        accountOwner: assignNullIfEmpty(atp?.fxDisposition?.accountOwner),
-        accountNo: assignNullIfEmpty(atp?.fxDisposition?.accountNo),
-        depository: assignNullIfEmpty(atp?.fxDisposition?.depository),
-        eventualRemittance: assignNullIfEmpty(atp?.fxDisposition?.eventualRemittance)
+        ...atp?.fxDisposition,
+        eventualRemittance: atp?.fxDisposition?.eventualRemittance,
       },
-      intendedBeneficiary: {
-        name: assignNullIfEmpty(atp?.intendedBeneficiary?.name),
-        address: assignNullIfEmpty(atp?.intendedBeneficiary?.address)
-      }
+      intendedBeneficiary: atp?.intendedBeneficiary,
     }],
   };
 
   delete atpData.atps[0]?.details?.sumOfBuyAmounts;
   delete atpData.atps[0]?.supportingDocs;
 
+  // Convert empty strings to null in the payload
+  const processedPayload = preparePayload(atpData);
+
+  // Generate the download URL
   const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
 
-  dispatch(onDownloadeAtp(configuration, filename, atpData, url));
+  // Dispatch the processed payload
+  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
 };
