@@ -23,6 +23,24 @@ import IntendedBeneficiary from './intendedBeneficiary/view';
 import { PreviewHeading } from './style';
 import { previewPageDataSelector } from '../../selectors/previewPage';
 
+const preparePayload = (data) => {
+  const convertEmptyToNull = (obj) => {
+    const newObj = Array.isArray(obj) ? [] : {}; // Maintain array structure if obj is an array
+    Object.keys(obj).forEach(key => {
+      if (obj[key] === '') {
+        newObj[key] = null;
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        newObj[key] = convertEmptyToNull(obj[key]); // Recursively process nested objects
+      } else {
+        newObj[key] = obj[key];
+      }
+    });
+    return newObj;
+  };
+
+  return convertEmptyToNull(data);
+};
+
 export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
   if (!trades || trades.length === 0) {
     // eslint-disable-next-line no-console
@@ -92,13 +110,15 @@ export const handleDownloadATP = (configuration, trades, cumulative, preview, la
   delete atpData.atps[0]?.details?.sumOfBuyAmounts;
   delete atpData.atps[0]?.supportingDocs;
 
-  // Generate the download URL for backend
+  // Convert empty strings to null in the payload
+  const processedPayload = preparePayload(atpData);
+
+  // Generate the download URL
   const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
 
-  // Dispatch the formatted ATP data to backend for PDF generation
-  dispatch(onDownloadeAtp(configuration, filename, atpData, url));
+  // Dispatch the processed payload
+  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
 };
-
 export const handleSelectedSections = (sections, previewPageActions, trades) => {
   if (trades.length === 1) {
     previewPageActions.onAccordionSelect(0);
