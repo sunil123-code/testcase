@@ -1,16 +1,18 @@
-
-
 export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
   if (!trades || trades.length === 0) {
+    // eslint-disable-next-line no-console
     return;
   }
 
   const now = new Date();
-  const timestamp = `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
+  const timestamp =
+    `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
 
-  const filenameReferenceNumber = preview?.atpTradeList?.[0]?.opicsId ?? trades?.[0]?.opicsId;
+  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId;
 
-  const multiFxFileName = trades?.length > 1 ? `ATP-MultiFX-${timestamp}` : `ATP-${trades[0].opicsId}-${timestamp}`;
+  const multiFxFileName = trades?.length > 1
+    ? `ATP-MultiFX-${timestamp}`
+    : `ATP-${trades[0].opicsId}-${timestamp}`;
 
   const filename = preview?.atpsCollective?.length > 1 ? `ATP-${filenameReferenceNumber}-1-${timestamp}` : multiFxFileName;
 
@@ -28,7 +30,7 @@ export const handleDownloadATP = (configuration, trades, cumulative, preview, la
     atp = cumulative.atps[0];
     totalAtps = cumulative.atps.length;
   } else {
-    atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective?.find(item => item.name === label);
+    atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective.filter(item => item.name === label)[0];
     totalAtps = preview?.atpsCollective?.length;
   }
 
@@ -36,28 +38,36 @@ export const handleDownloadATP = (configuration, trades, cumulative, preview, la
     trades: atpTradeList.map(trade => ({ opicsId: trade.opicsId })),
     totalNoOfAtps: totalAtps,
     atps: [{
-      atpId: cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId ?? null, // Use null if atpId is missing
-      referenceDocId: atp?.referenceDocId ?? null, // Use null if referenceDocId is missing
-      name: atp?.name ?? 'ATP 1', // Use 'ATP 1' if name is missing
+      atpId: cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId,
+      referenceDocId: atp?.referenceDocId || null,
+      name: atp?.name || 'ATP 1',
       details: {
         ...atp?.details,
-        contactInfo: atp?.details?.contactInfo ?? null, // Use null if contactInfo is missing
-        companyName: atp?.details?.companyName ?? null // Use null if companyName is missing
+        contactInfo: atp?.details?.contactInfo
       },
       purpose: {
         ...atp?.purpose,
-        principle: atp?.purpose?.principle ?? null, // Use null if principle is missing
+        principle: atp?.purpose?.principle
       },
       fxDisposition: {
         ...atp?.fxDisposition,
-        eventualRemittance: atp?.fxDisposition?.eventualRemittance ?? null, // Use null if eventualRemittance is missing
+        eventualRemittance: atp?.fxDisposition?.eventualRemittance
       },
-      intendedBeneficiary: atp?.intendedBeneficiary ?? null, // Use null if intendedBeneficiary is missing
+      intendedBeneficiary: atp?.intendedBeneficiary,
     }],
   };
 
   delete atpData.atps[0]?.details?.sumOfBuyAmounts;
   delete atpData.atps[0]?.supportingDocs;
+
+  // Add null values for empty fields when data comes from cumulative
+  if (cumulative?.atps?.[0]?.details?.companyName) {
+    Object.keys(atpData.atps[0]).forEach(key => {
+      if (atpData.atps[0][key] === '') {
+        atpData.atps[0][key] = null;
+      }
+    });
+  }
 
   const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
 
