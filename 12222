@@ -1,0 +1,28 @@
+
+
+export const cummulativeSelector = createSelector(
+  [tradeSelector, addMultiAtpSelector],
+  (trades, multiAtp) => {
+    const atps = multiAtp?.atps ?? [];
+
+    // Add null values for empty fields when data comes from multiAtp
+    atps.forEach(atp => {
+      Object.keys(atp).forEach(key => {
+        if (atp[key] === '') {
+          atp[key] = null;
+        }
+      });
+    });
+
+    return {
+      trades: trades.map((trade) => ({
+        opicsId: trade.opicsId,
+        tradeDate: trade.tradeDate,
+        valueDate: trade.valueDate,
+        sellAmount: trade.sellAmount,
+        sellCurrency: trade.sellCurrency
+      })),
+      atps,
+    };
+  },
+);
