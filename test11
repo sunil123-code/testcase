@@ -1,597 +1,236 @@
-import React, { useState, useEffect } from 'react';
-import { Select, TextField, Divider } from 'uds-core';
+import { useEffect, useCallback } from 'react';
+import { Card, Button } from 'uds-core';
+import { connect, useDispatch } from 'react-redux';
 import PropTypes from 'prop-types';
-import { useDispatch } from 'react-redux';
-import PrincipalTable from '../../components/PrincipalTable';
-import { updatePurposeCategory } from '../../actions/trades/actions';
 
+import Accordion from '../../components/Accordion';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
 import {
-  setPurposeCategoryValue,
-  setPurposeValue,
-  setDebtAccValue,
-  setPaymentTypeValue,
-  setTotalFXValue,
-  setOthersReasonyValue,
-  setSecurityTypeValue,
-  setPurposeStateValue,
-  setPurposeDropdownOptions,
-  setIspurposeIncomeEnable,
-} from '../../actions/atpDetailsForm/creators';
 
-import {
-  Row,
-  Col,
-  PrincipalCol,
-  TooltipWrapper,
-  DividerWrapper
-} from '../../style/form.styles';
-import { FORM_ERROR_MESSAGES, FORM_FIELDS_ID, PURPOSE_FIELD_IDS } from './constants';
-import { FullCol } from './detailsForm/view.style';
-import { checkArrayHavingObjectValues, isPurposeDropdownSelectionValid } from './utils/formHelper';
-import ErrorMessage from './errorMessage/errorMessage';
-import { changeAtpFormFieldValueTab } from '../../actions/multiATP/actions';
+  AccordionTitle,
+} from '../../style/common.styles';
 
-const ATPFormPage = ({ purposeCategories, ATPFlags, formFieldErrorIds, formDetails, selectedTab, fxPurchased, ATPFormDetails }) => {
-  const [data, setData] = useState(formDetails.purposeData ?? []);
-  const [paymentTypes, setPaymentTypes] = useState(formDetails?.paymentTypesData ?? []);
-  const [securityTypes, setSecurityTypes] = useState(formDetails?.securityTypesData ?? []);
-  const dispatch = useDispatch();
+import { getURL } from '../../common/utils/actionHelper';
+import { API_NAME } from '../../common/constants/constants'; // Ensure you import other necessary constants
+import endpoints from '../../apis/endpoints';
+import { onDownloadeAtp } from '../../actions/previewPage/creators';
+import MultiAccordion from '../../components/MultiAccordion';
+import PurposeForm from './purposeForm/view';
+import SupportForm from './supportForm/view';
+import FxDetails from './fxDetails/view';
+import FxDisposition from './fxDisposition/view';
+import IntendedBeneficiary from './intendedBeneficiary/view';
+import { PreviewHeading } from './style';
+import { previewPageDataSelector } from '../../selectors/previewPage';
 
-  const options = Array.isArray(purposeCategories?.purposeCategories) ? purposeCategories.purposeCategories.map((item) => ({
-    id: item?.id,
-    left: { content: item?.name }
-  })) : [];
+export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
+  if (!trades || trades.length === 0) {
+    // eslint-disable-next-line no-console
+    return;
+  }
 
-  const setPurposedata = (purposeCategory) => {
-    const purposeData = purposeCategories.purposes;
-    const categoryId = Array.isArray(purposeCategories.purposeCategories) ? purposeCategories.purposeCategories?.find(item => item.name === purposeCategory)?.id : null;
-    const pcdata = Array.isArray(purposeData) ? purposeData.filter(item => (item.categoryId === categoryId && item.type === 'PURPOSE')) : [];
-    const atppurpose = pcdata?.map((item) => {
-      return {
-        id: item?.id,
-        left: { content: item?.name }
-      };
-    });
+  const now = new Date();
+  const timestamp =
+    `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
 
-    setData(atppurpose);
-    dispatch(setPurposeDropdownOptions('purposeData', atppurpose));
+  // Assume the reference number is the opicsId from the first trade in the preview data
+  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId; // Fallback to first trade if no preview
+
+  const multiFxFileName = trades?.length > 1
+    ? `ATP-MultiFX-${timestamp}`
+    : `ATP-${trades[0].opicsId}-${timestamp}`;
+
+  const filename = preview?.atpsCollective?.length > 1 ? `ATP-${filenameReferenceNumber}-1-${timestamp}` : multiFxFileName;
+
+  // Handle cumulative data (keep existing functionality)
+  let atpTradeList = [];
+  let totalAtps = 0;
+  let atp = {};
+
+  // If preview data exists, use that instead
+  if (cumulative?.atps?.[0]?.details?.companyName) {
+    atpTradeList = trades; // Cumulative ATP trade list
+  } else {
+    atpTradeList = preview.tradesCollective; // Take only the first object for preview
+  }
+
+  if (cumulative?.atps?.[0]?.details?.companyName) {
+    atp = cumulative.atps[0]; // Cumulative ATP list
+    totalAtps = cumulative.atps.length;
+  } else {
+    atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective.filter(item => item.name === label)[0];
+    totalAtps = preview?.atpsCollective?.length;
+  }
+
+  // Format the data to be sent in JSON, excluding supportingDocs and taking only the first object
+  const atpData = {
+    trades: atpTradeList.map(trade => ({ opicsId: trade.opicsId })),
+    totalNoOfAtps: totalAtps,
+    atps: [{
+      // If cumulative data has a companyName, set atpID to null; otherwise use atpID from Preview Data
+      atpId: cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId,
+      referenceDocId: atp?.referenceDocId || null,
+      name: atp?.name || 'ATP 1',
+
+      details: {
+        ...atp?.details,
+        contactInfo: atp?.details?.contactInfo // Ensure contactInfo is used
+      },
+      purpose: {
+        ...atp?.purpose,
+        principle: atp?.purpose?.principle, // Ensure principal is used
+      },
+
+      fxDisposition: {
+        ...atp?.fxDisposition,
+        eventualRemittance: atp?.fxDisposition?.eventualRemittance, // Ensure eventualRemittance is used
+      },
+      intendedBeneficiary: atp?.intendedBeneficiary,
+    }],
   };
 
-  const selectedHandler = (value) => {
-    if (ATPFormDetails?.purposeCategory === value?.left?.content) {
-      return;
-    }
-    dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'purposeCategory', type: 'purpose', value: (value?.left?.content) }));
-    dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'purpose', type: 'purpose', value: ('') }));
-    if (typeof value === 'string' || !isPurposeDropdownSelectionValid(value?.left?.content, ATPFormDetails?.purpose?.purposeCategory)) {
-      return;
-    }
-    dispatch(setPurposeCategoryValue(value?.left?.content));
-    dispatch(updatePurposeCategory(value?.left?.content));
-    // const purposeData = purposeCategories.purposes;
-    // const pcdata = purposeData.filter(item => (item.categoryId === value?.id && item.type === 'PURPOSE'));
-    // const atppurpose = pcdata?.map((item) => {
-    //   return {
-    //     id: item?.id,
-    //     left: { content: item?.name }
-    //   };
-    // });
+  delete atpData.atps[0]?.details?.sumOfBuyAmounts;
+  delete atpData.atps[0]?.supportingDocs;
 
-    // setData(atppurpose);
-    // dispatch(setPurposeDropdownOptions('purposeData', atppurpose));
-  };
+  // Generate the download URL for backend
+  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
 
-  // const setPaymentData = (purpose) => {
-  //   const paymentTypesData = purposeCategories.payments;
+  // Dispatch the formatted ATP data to backend for PDF generation
+  dispatch(onDownloadeAtp(configuration, filename, atpData, url));
+};
 
-  //   const purposeid = purposeCategories.purposes?.find(item => item.name === purpose)?.id;
-  //   console.log('purposeid', purposeid);
+export const handleSelectedSections = (sections, previewPageActions, trades) => {
+  if (trades.length === 1) {
+    previewPageActions.onAccordionSelect(0);
+  } else {
+    previewPageActions.onAccordionSelect(sections[0]);
+  }
+};
 
-  //   const paymentTypedata = paymentTypesData.filter(item => (item.purposeId === purposeid && item.type === 'PAYMENT_TYPE'));
-  //   const atppaymentTypes = paymentTypedata?.map((item) => {
-  //     return {
-  //       id: item?.id,
-  //       left: { content: item?.name }
-  //     };
-  //   });
-
-  //   const securityData = purposeCategories.payments;
-  //   const securityTypedata = securityData.filter(item => (item.purposeId === purposeid && item.type === 'SECURITY_TYPE'));
-  //   const atpsecurityTypes = securityTypedata?.map((item) => {
-  //     return {
-  //       id: item?.id,
-  //       left: { content: item?.name }
-  //     };
-  //   });
-  // }
-
-  const purposeselectedHandler = value => {
-    if (ATPFormDetails?.purpose === value?.left?.content) {
-      return;
-    }
-    dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'purpose', type: 'purpose', value: (value?.left?.content) }));
-    dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'securityType', type: 'purpose', value: ('') }));
-    dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'specifiedReason', type: 'purpose', value: ('') }));
-    dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'paymentType', type: 'purpose', value: ('') }));
-    if (typeof value === 'string' || !isPurposeDropdownSelectionValid(value?.left?.content, ATPFormDetails?.purpose?.purpose)) {
-      return;
-    }
-
-    dispatch(setPurposeValue(value?.left?.content));
-
-    const paymentTypesData = purposeCategories.payments;
-    const paymentTypedata = paymentTypesData.filter(item => (item.purposeId === value?.id && item.type === 'PAYMENT_TYPE'));
-    const atppaymentTypes = paymentTypedata?.map((item) => {
-      return {
-        id: item?.id,
-        left: { content: item?.name }
-      };
-    });
-
-    const securityData = purposeCategories.payments;
-    const securityTypedata = securityData.filter(item => (item.purposeId === value?.id && item.type === 'SECURITY_TYPE'));
-    const atpsecurityTypes = securityTypedata?.map((item) => {
-      return {
-        id: item?.id,
-        left: { content: item?.name }
-      };
-    });
-
-    if (paymentTypedata && securityTypedata.length === 0) {
-      setPaymentTypes(atppaymentTypes);
-      dispatch(setPurposeDropdownOptions('paymentTypesData', atppaymentTypes));
-      if (paymentTypedata.length > 0) {
-        dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: true }));
-        dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecify', type: 'ATPFormPageFlags', value: false }));
-        dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecifyTooltip', type: 'ATPFormPageFlags', value: false }));
-
-        dispatch(setPurposeStateValue({ ...ATPFlags.ATPFormPageFlags, ispaymenttypes: true, isSpecify: false, isSpecifyTooltip: false }));
-      } else if (paymentTypedata.length === 0) {
-        dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: false }));
-        dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'issecuritytypes', type: 'ATPFormPageFlags', value: false }));
-        dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value: false }));
-        dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecify', type: 'ATPFormPageFlags', value: false }));
-        dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecifyTooltip', type: 'ATPFormPageFlags', value: false }));
-
-        dispatch(setPurposeStateValue({
-          ...ATPFlags.ATPFormPageFlags, ispaymenttypes: false, issecuritytypes: false,
-          isEnablePrincipalCol: false, isSpecify: false, isSpecifyTooltip: false
-        }));
-      }
-    } else if (securityTypedata) {
-      setSecurityTypes(atpsecurityTypes);
-      dispatch(setPurposeDropdownOptions('securityTypesData', atpsecurityTypes));
-      if (securityTypedata.length > 0) {
-        dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'issecuritytypes', type: 'ATPFormPageFlags', value: true }));
-        dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecify', type: 'ATPFormPageFlags', value: false }));
-
-        dispatch(setPurposeStateValue({ ...ATPFlags.ATPFormPageFlags, issecuritytypes: true, isSpecify: false, }));
-      } else if (securityTypedata.length === 0) {
-        dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'issecuritytypes', type: 'ATPFormPageFlags', value: false }));
-
-        dispatch(setPurposeStateValue({ ...ATPFlags.ATPFormPageFlags, issecuritytypes: false }));
-      }
-    }
-  };
-
-  const purposesuggestionHandler = value => {
-    const investmentOthers = 'Investments in instruments' +
-      ' (including time deposits with at least 90-day maturity with onshore banks but excluding other bank deposits such as savings and demand)' +
-      ' that are issued by other residents';
-    if (value === 'Others') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecify', type: 'ATPFormPageFlags', value: true }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'issecuritytypes', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value: false }));
-
-      dispatch(setPurposeStateValue({ ...ATPFlags.ATPFormPageFlags, isSpecify: true, ispaymenttypes: false, issecuritytypes: false, isEnablePrincipalCol: false }));
-    } else if (value === investmentOthers) {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecify', type: 'ATPFormPageFlags', value: true }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value: false }));
-
-      dispatch(setPurposeStateValue({ ...ATPFlags.ATPFormPageFlags, isSpecify: true, ispaymenttypes: false, isEnablePrincipalCol: false }));
-    }
-    if (value === 'Income') {
-      dispatch(setIspurposeIncomeEnable(true));
-    } else {
-      dispatch(setIspurposeIncomeEnable(false));
-    }
-    if (value === 'Services') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecifyTooltip', type: 'ATPFormPageFlags', value: true }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: false }));
-
-      dispatch(setPurposeStateValue({ ...ATPFlags.ATPFormPageFlags, isSpecifyTooltip: true, ispaymenttypes: false }));
-    }
-  };
-
-  const paymentTypesselectedHandler = value => {
-    dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'paymentType', type: 'purpose', value: (value?.left?.content) }));
-    if (typeof value === 'string' || !isPurposeDropdownSelectionValid(value?.left?.content, ATPFormDetails?.purpose?.paymentType)) {
-      return;
-    }
-    dispatch(setPaymentTypeValue(value?.left?.content));
-    const paymentComData = purposeCategories.paymentComponents;
-    const paymentComponentsdata = paymentComData.filter(item => (item.paymentId === value?.id));
-    if (paymentComponentsdata.length > 0) {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value: true }));
-
-      dispatch(setPurposeStateValue({ ...ATPFlags.ATPFormPageFlags, isEnablePrincipalCol: true }));
-    } else {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value: false }));
-
-      dispatch(setPurposeStateValue({ ...ATPFlags.ATPFormPageFlags, isEnablePrincipalCol: false }));
-    }
-  };
-
-  const securityTypesselectedHandler = value => {
-    dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'securityType', type: 'purpose', value: (value?.left?.content) }));
-    if (typeof value === 'string' || !isPurposeDropdownSelectionValid(value?.left?.content, ATPFormDetails?.purpose?.securityType)) {
-      return;
-    }
-    dispatch(setSecurityTypeValue(value?.left?.content));
-  };
-
-  const onChangeDebt = (e) => {
-    dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'debtAccount', type: 'purpose', value: ( e?.target?.value) }));
-    const debitAccountNo = e?.target?.value ?? '';
-    dispatch(setDebtAccValue(debitAccountNo));
-  };
-
-  const onChangeTotalFX = (e) => {
-    dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'totalFXPurchased', type: 'purpose', value: ( e?.target?.value) }));
-    const totalFX = e?.target?.value ?? '';
-    dispatch(setTotalFXValue(totalFX));
-  };
-
-  const onChangeIsSpecify = (e) => {
-    dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'specifiedReason', type: 'purpose', value: ( e?.target?.value) }));
-    const specifyValue = e?.target?.value ?? '';
-    dispatch(setOthersReasonyValue(specifyValue));
-  };
-
-  useEffect(() => {
-    // alert('1');
-    setPurposedata(ATPFormDetails?.purposeCategory );
-
-    if (ATPFormDetails?.purposeCategory === 'Foreign loans /borrowings') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isDebt', type: 'ATPFormPageFlags', value: true }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispurposeEnable', type: 'ATPFormPageFlags', value: true }));
-      // dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'issecuritytypes', type: 'ATPFormPageFlags', value:false }));
-      // dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isTotalFX', type: 'ATPFormPageFlags', value:false }));
-      // dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value:false }));
-      // dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecifyTooltip', type: 'ATPFormPageFlags', value:false }));
-      // dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecify', type: 'ATPFormPageFlags', value:false }));
-      // dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value:false }));
-
-      dispatch(setPurposeStateValue({
-        ...ATPFlags.ATPFormPageFlags,
-        isDebt: true,
-        ispurposeEnable: true,
-        issecuritytypes: false,
-        isTotalFX: false,
-        ispaymenttypes: false,
-        isSpecifyTooltip: false,
-        isSpecify: false,
-        isEnablePrincipalCol: false
-      }));
-    } else if (ATPFormDetails?.purposeCategory === 'Outward Investments by Residents') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isDebt', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isTotalFX', type: 'ATPFormPageFlags', value: true }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispurposeEnable', type: 'ATPFormPageFlags', value: true }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'issecuritytypes', type: 'ATPFormPageFlags', value: false }));
-
-      dispatch(setPurposeStateValue({
-        ...ATPFlags.ATPFormPageFlags, isDebt: false, isTotalFX: true, ispurposeEnable: true, ispaymenttypes: false, isEnablePrincipalCol: false,
-        issecuritytypes: false
-      }));
-    }
-    else if (ATPFormDetails?.purposeCategory === 'Trade (payment for importations)') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isDebt', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isTotalFX', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispurposeEnable', type: 'ATPFormPageFlags', value: true }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'issecuritytypes', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecify', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecifyTooltip', type: 'ATPFormPageFlags', value: false }));
-
-      dispatch(setPurposeStateValue({
-        ...ATPFlags.ATPFormPageFlags, isDebt: false, isTotalFX: false,
-        ispurposeEnable: false,
-        ispaymenttypes: false,
-        issecuritytypes: false,
-        isEnablePrincipalCol: false,
-        isSpecify: false,
-        isSpecifyTooltip: false,
-      }));
-    }
-    else if (ATPFormDetails?.purposeCategory === '') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isDebt', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispurposeEnable', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isTotalFX', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'issecuritytypes', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecify', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecifyTooltip', type: 'ATPFormPageFlags', value: false }));
-
-      dispatch(setPurposeStateValue({
-        ...ATPFlags.ATPFormPageFlags, isDebt: false, ispurposeEnable: false, isTotalFX: false,
-        issecuritytypes: false, isEnablePrincipalCol: false, ispaymenttypes: false, isSpecify: false, isSpecifyTooltip: false
-      }));
-    }
-    else {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isDebt', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispurposeEnable', type: 'ATPFormPageFlags', value: true }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isTotalFX', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'issecuritytypes', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecify', type: 'ATPFormPageFlags', value: false }));
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isSpecifyTooltip', type: 'ATPFormPageFlags', value: false }));
-
-      dispatch(setPurposeStateValue({
-        ...ATPFlags.ATPFormPageFlags, isDebt: false, ispurposeEnable: true, isTotalFX: false,
-        issecuritytypes: false, isEnablePrincipalCol: false, ispaymenttypes: false, isSpecify: false, isSpecifyTooltip: false
-      }));
-    }
-  }, [ATPFormDetails?.purposeCategory]);
-
-  useEffect(() => {
-    // setPaymentData(ATPFormDetails?.purpose);
-
-    if (ATPFormDetails?.purpose === 'Owed to Offshore Banking Units in the Philippines') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: true }));
-      dispatch(setPurposeStateValue({ ispaymenttypes: true }));
-    } else if ( ATPFormDetails?.purpose === 'Owed to Non-residents (other than OBUs)') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: false }));
-      dispatch(setPurposeStateValue({ ispaymenttypes: false }));
-    } else if ( ATPFormDetails?.purpose === 'Equity securities') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'issecuritytypes', type: 'ATPFormPageFlags', value: true }));
-      dispatch(setPurposeStateValue({ issecuritytypes: true, isSpecify: false }));
-    } else if (ATPFormDetails?.purpose === 'Foreign currency loans owed to banks operating in the Philippines (FCDU/EFCDU/RBU)') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: true }));
-      dispatch(setPurposeStateValue({ ispaymenttypes: true }));
-    } else if ( ATPFormDetails?.purpose === 'Non-merchandise Insurance') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispaymenttypes', type: 'ATPFormPageFlags', value: true }));
-      dispatch(setPurposeStateValue({ ispaymenttypes: true }));
-    } else if ( ATPFormDetails?.purpose === 'Income') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispurposeIncomeEnable', type: 'ATPFormPageFlags', value: true }));
-      dispatch(setPurposeStateValue({ ispurposeIncomeEnable: true }));
-    } else {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'ispurposeIncomeEnable', type: 'ATPFormPageFlags', value: false }));
-      dispatch(setPurposeStateValue({ ispurposeIncomeEnable: false }));
-    }
-  }, [ATPFormDetails?.purpose]);
-
-  useEffect(() => {
-    if (ATPFormDetails?.paymentType === 'Regular Payment') {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value: true }));
-      dispatch(setPurposeStateValue({ isEnablePrincipalCol: true }));
-    } else {
-      dispatch(changeAtpFormFieldValueTab({ id: selectedTab, key: 'isEnablePrincipalCol', type: 'ATPFormPageFlags', value: false }));
-      dispatch(setPurposeStateValue({ isEnablePrincipalCol: false }));
-    }
-  }, [ATPFormDetails?.paymentType]);
-
+const getSingleAtpSections = (ATP) => {
   return (
-    <div style={{ background: '#F7F7F7', padding: '14px' }}>
-
-      <DividerWrapper>
-        <Divider variant="text" textAlign="LEFT" text="Purpose" />
-      </DividerWrapper>
-      <Row>
-        {formFieldErrorIds?.includes(FORM_ERROR_MESSAGES.PRINCIPLE_INTEREST_FEES_ERROR_MESSAGE) &&
-          <FullCol>
-            <ErrorMessage content={FORM_ERROR_MESSAGES.PRINCIPLE_INTEREST_FEES_ERROR_MESSAGE} />
-          </FullCol>}
-        {checkArrayHavingObjectValues(formFieldErrorIds, PURPOSE_FIELD_IDS) &&
-          <FullCol>
-            <ErrorMessage content={FORM_ERROR_MESSAGES.MANDATORY_FIELDS_ERROR_MESSAGE} />
-          </FullCol>}
-        <Col id={PURPOSE_FIELD_IDS.PURPOSE_CATEGORY}>
-          <Select
-            id={PURPOSE_FIELD_IDS.PURPOSE_CATEGORY}
-            suggestions={options}
-            handleSelectedSuggestion={selectedHandler}
-            handleSuggestions={() => { }}
-            icon={{ position: 'right', iconName: 'ic_chevron_down_blue' }}
-            isFocusOpen
-            isFilterDropdown
-            title={{ label: 'Purpose Category' }}
-            placeholder="Select"
-            suggestionValue={ATPFormDetails?.purposeCategory || '' }
-            hasError={formFieldErrorIds?.includes(PURPOSE_FIELD_IDS.PURPOSE_CATEGORY)}
-          />
-        </Col>
-
-        {ATPFlags?.ATPFormPageFlags?.isDebt &&
-          <Col>
-            <TextField
-              value={ATPFormDetails?.debtAccount?.length > 0 ? ATPFormDetails?.debtAccount : ''}
-              id={PURPOSE_FIELD_IDS.DEBT_ACCOUNT}
-              maxlength={35}
-              title={{ label: 'Debt Account No' }}
-              canClear
-              placeholder="Debt Account No"
-              onChange={onChangeDebt}
-              hasError={formFieldErrorIds?.includes(PURPOSE_FIELD_IDS.DEBT_ACCOUNT)}
-            />
-          </Col>
-        }
-
-        {ATPFlags?.ATPFormPageFlags?.isTotalFX &&
-          <Col>
-            <TextField
-              value={ATPFormDetails?.totalFXPurchased || ''}
-              id={PURPOSE_FIELD_IDS.TOTAL_FX_PURCHASED}
-              maxlength={35}
-              title={{ label: 'Total FX Purchases for the current calender year' }}
-              canClear
-              placeholder="Total FX Purchases for the current calender year"
-              onChange={onChangeTotalFX}
-              hasError={formFieldErrorIds?.includes(PURPOSE_FIELD_IDS.TOTAL_FX_PURCHASED)}
-            />
-          </Col>
-        }
-
-        {ATPFlags?.ATPFormPageFlags?.ispurposeEnable &&
-          <Col data-testid="purpose" id={PURPOSE_FIELD_IDS.PURPOSE}>
-            <Select
-              suggestionValue={ATPFormDetails?.purpose || ''}
-              suggestions={data}
-              handleSelectedSuggestion={purposeselectedHandler}
-              handleSuggestions={purposesuggestionHandler}
-              icon={{ position: 'right', iconName: 'ic_chevron_down_blue' }}
-              isFocusOpen
-              isFilterDropdown
-              title={{ label: 'Purpose' }}
-              placeholder="Select"
-              hasError={formFieldErrorIds?.includes(PURPOSE_FIELD_IDS.PURPOSE)}
-            />
-
-            {ATPFlags?.ATPFormPageFlags?.ispurposeIncomeEnable &&
-              <TooltipWrapper>Other than those related to loans and investments</TooltipWrapper>
-            }
-          </Col>
-        }
-
-        {ATPFlags?.ATPFormPageFlags?.ispaymenttypes &&
-          <Col data-testid="paymentTypes" id={PURPOSE_FIELD_IDS.PAYMENT_TYPE}>
-            <Select
-              suggestionValue={ATPFormDetails?.paymentType || ''}
-              suggestions={paymentTypes}
-              handleSelectedSuggestion={paymentTypesselectedHandler}
-              handleSuggestions={() => { }}
-              icon={{ position: 'right', iconName: 'ic_chevron_down_blue' }}
-              isFocusOpen
-              isFilterDropdown
-              title={{ label: 'Payment Type' }}
-              placeholder="Select"
-              hasError={formFieldErrorIds?.includes(PURPOSE_FIELD_IDS.PAYMENT_TYPE)}
-            />
-          </Col>
-        }
-
-        {ATPFlags?.ATPFormPageFlags?.issecuritytypes &&
-          <Col data-testid="securityTypes" id={PURPOSE_FIELD_IDS.SECURITY_TYPE}>
-            <Select
-              suggestions={securityTypes}
-              suggestionValue={ATPFormDetails?.securityType || ''}
-              handleSelectedSuggestion={securityTypesselectedHandler}
-              handleSuggestions={() => { }}
-              icon={{ position: 'right', iconName: 'ic_chevron_down_blue' }}
-              isFocusOpen
-              isFilterDropdown
-              title={{ label: 'Security Type' }}
-              placeholder="Select"
-              hasError={formFieldErrorIds?.includes(PURPOSE_FIELD_IDS.SECURITY_TYPE)}
-            />
-          </Col>
-        }
-
-        {ATPFlags?.ATPFormPageFlags?.isEnablePrincipalCol &&
-          <PrincipalCol id={FORM_FIELDS_ID.PRINCIPLE_INTEREST_FEES}>
-            <PrincipalTable
-              formFieldErrorIds={formFieldErrorIds}
-              selectedTab={selectedTab}
-              formDetails={ATPFormDetails}
-              fxPurchased ={fxPurchased}
-            />
-          </PrincipalCol>
-        }
-
-        {ATPFlags?.ATPFormPageFlags?.isSpecify &&
-          <Col>
-            <TextField
-              value={ATPFormDetails?.specifiedReason }
-              id={PURPOSE_FIELD_IDS.SPECIFIED_REASON_1}
-              name="Transaction Ref No"
-              maxlength={800}
-              title={{
-                label: 'Please Specify'
-              }}
-              canClear
-              placeholder="Enter"
-              onChange={onChangeIsSpecify}
-              hasError={formFieldErrorIds?.includes(PURPOSE_FIELD_IDS.SPECIFIED_REASON_1)}
-            />
-          </Col>
-        }
-
-        {ATPFlags?.ATPFormPageFlags?.isSpecifyTooltip &&
-          <Col>
-            <TextField
-              value={ATPFormDetails?.specifiedReason || ''}
-              id={PURPOSE_FIELD_IDS.SPECIFIED_REASON_2}
-              name="Transaction Ref No"
-              maxlength={800}
-              title={{
-                label: 'Please Specify',
-                tooltip: {
-                  content: 'Such as Communications, Manufacturing, Maintenance and Repairs,' +
-                    'Postal and Courier, Computer and information, Research and Development,' +
-                    'Advertising, Market Research, Technical and Other Business Services'
-                }
-              }}
-              canClear
-              placeholder="Enter"
-              onChange={onChangeIsSpecify}
-              hasError={formFieldErrorIds?.includes(PURPOSE_FIELD_IDS.SPECIFIED_REASON_2)}
-            />
-          </Col>
-        }
-
-      </Row>
+    <div style={{ padding: '0px 20px' }}>
+      <FxDetails details={ATP?.details} />
+      <PurposeForm atps={ATP?.purpose} details={ATP?.details} />
+      <FxDisposition fxDisposition={ATP?.fxDisposition} />
+      <IntendedBeneficiary intendedBeneficiary={ATP?.intendedBeneficiary} />
+      <SupportForm supportingDocs={ATP?.supportingDocs} />
     </div>
   );
 };
-ATPFormPage.propTypes = {
-  purposeCategories: PropTypes.shape({
-    purposeCategories: PropTypes.arrayOf(PropTypes.shape({
-      id: PropTypes.number.isRequired,
-      name: PropTypes.string.isRequired,
-    })).isRequired,
-    purposes: PropTypes.arrayOf(PropTypes.shape({
-      id: PropTypes.number.isRequired,
-      name: PropTypes.string.isRequired,
-    })).isRequired,
-    payments: PropTypes.arrayOf(PropTypes.shape({
-      id: PropTypes.number.isRequired,
-      name: PropTypes.string.isRequired,
-    })).isRequired,
-    paymentComponents: PropTypes.arrayOf(PropTypes.shape({
-      id: PropTypes.number.isRequired,
-      name: PropTypes.string.isRequired,
-    })).isRequired,
-  }).isRequired,
-  ATPFlags: PropTypes.shape({
-    ATPFormPageFlags: PropTypes.shape({})
-  }),
-  formFieldErrorIds: PropTypes.arrayOf(PropTypes.string),
-  formDetails: PropTypes.shape({
-    isPurposeIncomeEnable: PropTypes.bool,
-    purposeData: PropTypes.shape([]),
-    paymentTypesData: PropTypes.shape([]),
-    securityTypesData: PropTypes.shape([])
-  }),
-  ATPFormDetails: PropTypes.shape({
-    purposeCategory: PropTypes.string,
-    totalFXPurchased: PropTypes.string,
-    debtAccount: PropTypes.string,
-    purpose: PropTypes.string,
-    paymentType: PropTypes.string,
-    principle: PropTypes.string,
-    interest: PropTypes.string,
-    fees: PropTypes.string,
-    securityType: PropTypes.string,
-    specifiedReason: PropTypes.string
-  }),
-  fxPurchased: PropTypes.shape({ }),
-  selectedTab: PropTypes.number
+
+const CardView = ({ trades, previewPageActions, apiConfiguration, preview,
+  cummulative }) => {
+  const dispatch = useDispatch();
+
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+  useEffect(() => {
+    if (trades.length === 1) {
+      previewPageActions.onAccordionSelect(0);
+    } else {
+      previewPageActions.onAccordionSelect('');
+    }
+    return () => {
+      previewPageActions.onAccordionSelect(0);
+    };
+  }, [trades.length, previewPageActions]);
+
+  const handleDownloadAtpCallBack = useCallback((label) => {
+    handleDownloadATP(apiConfiguration, trades, cummulative, preview, label, dispatch);
+  }, [apiConfiguration, trades, cummulative, preview, dispatch]);
+
+  const header1 = {
+    cardNumber: 1,
+    title: <PreviewHeading>Transaction Details</PreviewHeading>,
+  };
+
+  const header2 = {
+    cardNumber: 2,
+    title: (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div><PreviewHeading>Purchase Application</PreviewHeading></div>
+        {
+          selectedATPS?.length <= 1 && <div>
+            <Button
+              data-testid="button-submit"
+              variant="small"
+              buttonType="link"
+              onClick={handleDownloadAtpCallBack}
+              leftIconName="ic_upload"
+            >
+              Download ATP
+            </Button>
+          </div>
+        }
+      </div>
+    ),
+  };
+
+  const isSingleOpen = true;
+
+  const icons = { close: 'ic_chevron_down', open: 'ic_chevron_right' };
+
+  return (
+    <>
+      <Card header={header1}>
+
+        <AccordionTitle>
+          <Accordion
+            isSingleOpen={isSingleOpen}
+            icons={icons}
+            handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
+            defaultCheckedSections={[0]}
+            trades={trades}
+            label="ATP1"
+          />
+        </AccordionTitle>
+      </Card>
+
+      <div style={{ marginTop: '-50px' }}>
+        <Card header={header2}>
+
+          {selectedATPS?.length > 1 ?
+            <div style={{ padding: '0px 20px' }}>
+              <MultiAccordion
+                isSingleOpen={isSingleOpen}
+                icons={icons}
+                handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
+                defaultCheckedSections={[0]}
+                getSingleATPSections={getSingleAtpSections}
+                handleDownloadAtpCallBack={handleDownloadAtpCallBack}
+              />
+
+              {/* </MultiAccordion> */}
+            </div>
+            : getSingleAtpSections(selectedATPS[0])
+          }
+        </Card>
+      </div>
+    </>
+  );
 };
 
-export default ATPFormPage;
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state)
+});
+
+CardView.propTypes = {
+  trades: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    opicsId: PropTypes.string.isRequired, // Ensure opicsId is required
+  })).isRequired,
+  previewPageActions: PropTypes.shape({
+    onAccordionSelect: PropTypes.func.isRequired,
+  }).isRequired,
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
+  }),
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
+  }),
+  apiConfiguration: PropTypes.shape({})
+};
+
+export default connect(mapStateToProps)(CardView);
