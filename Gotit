@@ -1,3 +1,14 @@
+For a single FX to Multi ATP
+Filename: "ATP-" + "Reference Number generated in the PDF" + "-date&timestamp"
+date&timestamp is written in yyyymmddtttt format.
+
+Example:
+Trade 4223331 is linked to 2 ATP.
+User downloads file on 2024 October 07 at time 1845.
+For one of the ATP, the Filename is "ATP-4223331-1-202410071845"
+While the other ATP PDF will have the filename is "ATP-4223331-2-202410071845"
+
+
 
 
 To ensure that the click event is only triggered when clicking on the Download ATP button and not the entire accordion row or div, you need to prevent the event from propagating to parent elements. Here’s the updated implementation:
