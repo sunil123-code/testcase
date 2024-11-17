@@ -1,86 +1,113 @@
 
 
-// Helper function to convert empty strings to null in an object
-const preparePayload = (data) => {
-  const convertEmptyToNull = (obj) => {
-    if (typeof obj === 'object' && obj !== null) {
-      Object.keys(obj).forEach(key => {
-        if (obj[key] === '') {
-          obj[key] = null;
-        } else if (typeof obj[key] === 'object') {
-          convertEmptyToNull(obj[key]); // Recursively handle nested objects
-        }
-      });
-    }
-    return obj;
-  };
-  
-  return convertEmptyToNull(data);
-};
+import { Accordion, Button } from 'uds-core';
+import PropTypes from 'prop-types';
+import { connect } from 'react-redux';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import { previewPageDataSelector } from '../../selectors/previewPage';
+import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
 
-export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
-  if (!trades || trades.length === 0) {
-    return;
-  }
+const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
 
-  const now = new Date();
-  const timestamp = `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
+  // Utility to generate the filename with index always as 1
+  const generateFilename = (referenceNumber) => {
+    const now = new Date();
+    const yyyymmdd = now.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+    const tttt = now.toTimeString().slice(0, 5).replace(':', ''); // HHMM
 
-  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId;
-  const multiFxFileName = trades?.length > 1 ? `ATP-MultiFX-${timestamp}` : `ATP-${trades[0].opicsId}-${timestamp}`;
-  const filename = preview?.atpsCollective?.length > 1 ? `ATP-${filenameReferenceNumber}-1-${timestamp}` : multiFxFileName;
+    // Always set index as 1
+    const index = 1;
 
-  let atpTradeList = [];
-  let totalAtps = 0;
-  let atp = {};
-
-  if (cumulative?.atps?.[0]?.details?.companyName) {
-    atpTradeList = trades;
-  } else {
-    atpTradeList = preview.tradesCollective;
-  }
-
-  if (cumulative?.atps?.[0]?.details?.companyName) {
-    atp = cumulative.atps[0];
-    totalAtps = cumulative.atps.length;
-  } else {
-    atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective.filter(item => item.name === label)[0];
-    totalAtps = preview?.atpsCollective?.length;
-  }
-
-  // Construct the ATP data payload
-  const atpData = {
-    trades: atpTradeList.map(trade => ({ opicsId: trade.opicsId })),
-    totalNoOfAtps: totalAtps,
-    atps: [{
-      atpId: cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId,
-      referenceDocId: atp?.referenceDocId || null,
-      name: atp?.name || 'ATP 1',
-      details: {
-        ...atp?.details,
-        contactInfo: atp?.details?.contactInfo,
-      },
-      purpose: {
-        ...atp?.purpose,
-        principle: atp?.purpose?.principle,
-      },
-      fxDisposition: {
-        ...atp?.fxDisposition,
-        eventualRemittance: atp?.fxDisposition?.eventualRemittance,
-      },
-      intendedBeneficiary: atp?.intendedBeneficiary,
-    }],
+    // Create the filename as "ATP-{referenceNumber}-{index}-{yyyymmddtttt}"
+    return `ATP-${referenceNumber}-${index}-${yyyymmdd}${tttt}`;
   };
 
-  delete atpData.atps[0]?.details?.sumOfBuyAmounts;
-  delete atpData.atps[0]?.supportingDocs;
+  const callEachAtp = (atp) => (
+    getSingleATPSections(atp)
+  );
 
-  // Convert empty strings to null in the payload
-  const processedPayload = preparePayload(atpData);
+  const handleMultiDownloadAtpCallback = (e, atps) => {
+    e.stopPropagation(); // Prevent event propagation
 
-  // Generate the download URL
-  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
+    // Loop over each ATP and trigger the download for each
+    atps.forEach((atp) => {
+      const referenceNumber = atp.referenceNumber || 'Unknown'; // Fallback if no reference number exists
+      const filename = generateFilename(referenceNumber); // Generate filename with index 1
+      handleDownloadAtpCallBack(filename); // Pass the filename to the callback
+    });
+  };
 
-  // Dispatch the processed payload
-  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
+  const multiAtpLabel = (atps) => {
+    return (
+      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
+          <span>Download All ATPs</span>
+        </AccordionCol>
+        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
+          <Button
+            variant="small"
+            buttonType="link"
+            onClick={(e) => handleMultiDownloadAtpCallback(e, atps)}
+            leftIconName="ic_upload"
+          >
+            Download All ATPs
+          </Button>
+        </AccordionCol>
+      </AccordionRow>
+    );
+  };
+
+  return (
+    <MultiAtpLabelStyle>
+      <Accordion
+        theme="blue"
+        variant="contained"
+        iconPosition="left"
+        isSingleOpen={isSingleOpen}
+        icons={icons}
+        selectedSections={handleSelectedSections}
+        defaultCheckedSections={[0]}
+      >
+        {selectedATPS
+          ? selectedATPS.map((atp, index) => (
+              <AccordionTitle
+                key={atp.name}
+                label={multiAtpLabel(selectedATPS)} // Pass the full list of selected ATPs
+              >
+                {callEachAtp(atp)}
+              </AccordionTitle>
+            ))
+          : ''}
+      </Accordion>
+    </MultiAtpLabelStyle>
+  );
 };
+
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state)
+});
+
+MultiAccordion.propTypes = {
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape({
+      referenceNumber: PropTypes.string, // Ensure this is defined in the ATP object
+      name: PropTypes.string
+    }))
+  }),
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({
+      referenceNumber: PropTypes.string, // Ensure this is defined in the ATP object
+      name: PropTypes.string
+    }))
+  }),
+  icons: PropTypes.bool,
+  isSingleOpen: PropTypes.bool,
+  handleSelectedSections: PropTypes.func,
+  getSingleATPSections: PropTypes.func,
+  handleDownloadAtpCallBack: PropTypes.func.isRequired, // Callback to handle download
+};
+
+export default connect(mapStateToProps)(MultiAccordion);
