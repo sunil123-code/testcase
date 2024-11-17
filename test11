@@ -20,33 +20,33 @@ const generateFilename = (referenceNumber) => {
 };
 
 const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
-  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+  const selectedLabels = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
 
-  const callEachAtp = (atp) => (
-    getSingleATPSections(atp)
+  const callEachLabel = (label) => (
+    getSingleATPSections(label)
   );
 
-  const handleDownloadATPCallback = (e, atp) => {
+  const handleDownloadATPCallback = (e, label) => {
     // Prevent event from propagating to parent elements
     e.stopPropagation();
     
-    const referenceNumber = atp.referenceNumber || 'Unknown'; // Fallback if no reference number exists
+    const referenceNumber = label.referenceNumber || 'Unknown'; // Fallback if no reference number exists
     const filename = generateFilename(referenceNumber); // Generate filename with index 1
     handleDownloadAtpCallBack(filename); // Pass the filename to the callback
   };
 
-  const multiAtpLabel = (atp) => {
+  const multiLabel = (label) => {
     return (
       <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
-          <span>{atp.name}</span>
+          <span>{label.name}</span>
         </AccordionCol>
         <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
           <Button
             data-testid="button-submit"
             variant="small"
             buttonType="link"
-            onClick={(e) => handleDownloadATPCallback(e, atp)}
+            onClick={(e) => handleDownloadATPCallback(e, label)}
             leftIconName="ic_upload"
           >
             Download ATP
@@ -67,8 +67,8 @@ const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulati
         selectedSections={handleSelectedSections}
         defaultCheckedSections={[0]}
       >
-        {selectedATPS ? selectedATPS.map(atp =>
-          <AccordionTitle key={atp.name} label={multiAtpLabel(atp)}>{callEachAtp(atp)}</AccordionTitle>) : ''
+        {selectedLabels ? selectedLabels.map(label =>
+          <AccordionTitle key={label.name} label={multiLabel(label)}>{callEachLabel(label)}</AccordionTitle>) : ''
         }
       </Accordion>
     </MultiAtpLabelStyle>
