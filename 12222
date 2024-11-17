@@ -1,78 +1,232 @@
-
-
-import { Accordion, Button } from 'uds-core';
+import { useEffect, useCallback } from 'react';
+import { Card, Button } from 'uds-core';
+import { connect, useDispatch } from 'react-redux';
 import PropTypes from 'prop-types';
-import { connect } from 'react-redux';
+
+import Accordion from '../../components/Accordion';
 import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import {
+
+  AccordionTitle,
+} from '../../style/common.styles';
+
+import { getURL } from '../../common/utils/actionHelper';
+import { API_NAME } from '../../common/constants/constants'; // Ensure you import other necessary constants
+import endpoints from '../../apis/endpoints';
+import { onDownloadeAtp } from '../../actions/previewPage/creators';
+import MultiAccordion from '../../components/MultiAccordion';
+import PurposeForm from './purposeForm/view';
+import SupportForm from './supportForm/view';
+import FxDetails from './fxDetails/view';
+import FxDisposition from './fxDisposition/view';
+import IntendedBeneficiary from './intendedBeneficiary/view';
+import { PreviewHeading } from './style';
 import { previewPageDataSelector } from '../../selectors/previewPage';
-import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
 
-const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
-  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
-
-  // Utility to generate the filename
-  const generateFilename = (referenceNumber, index) => {
-    const now = new Date();
-    const yyyymmdd = now.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
-    const tttt = now.toTimeString().slice(0, 5).replace(':', ''); // HHMM
-    return `ATP-${referenceNumber}-${index + 1}-${yyyymmdd}${tttt}`;
+const preparePayload = (data) => {
+  const convertEmptyToNull = (obj) => {
+    const newObj = Array.isArray(obj) ? [] : {}; // Maintain array structure if obj is an array
+    Object.keys(obj).forEach(key => {
+      if (obj[key] === '') {
+        newObj[key] = null;
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        newObj[key] = convertEmptyToNull(obj[key]); // Recursively process nested objects
+      } else {
+        newObj[key] = obj[key];
+      }
+    });
+    return newObj;
   };
 
-  const callEachAtp = (atp) => (
-    getSingleATPSections(atp)
+  return convertEmptyToNull(data);
+};
+
+export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
+  if (!trades || trades.length === 0) {
+    // eslint-disable-next-line no-console
+    return;
+  }
+
+  const now = new Date();
+  const timestamp =
+    `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
+
+  // Assume the reference number is the opicsId from the first trade in the preview data
+  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId; // Fallback to first trade if no preview
+
+  const multiFxFileName = trades?.length > 1
+    ? `ATP-MultiFX-${timestamp}`
+    : `ATP-${trades[0].opicsId}-${timestamp}`;
+
+  const filename = preview?.atpsCollective?.length > 1 ? `ATP-${filenameReferenceNumber}-1-${timestamp}` : multiFxFileName;
+
+  // Handle cumulative data (keep existing functionality)
+  let atpTradeList = [];
+  let totalAtps = 0;
+  let atp = {};
+
+  // If preview data exists, use that instead
+  if (cumulative?.atps?.[0]?.details?.companyName) {
+    atpTradeList = trades; // Cumulative ATP trade list
+  } else {
+    atpTradeList = preview.tradesCollective; // Take only the first object for preview
+  }
+
+  if (cumulative?.atps?.[0]?.details?.companyName) {
+    atp = cumulative.atps[0]; // Cumulative ATP list
+    totalAtps = cumulative.atps.length;
+  } else {
+    atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective.filter(item => item.name === label)[0];
+    totalAtps = preview?.atpsCollective?.length;
+  }
+
+  // Format the data to be sent in JSON, excluding supportingDocs and taking only the first object
+  const atpData = {
+    trades: atpTradeList.map(trade => ({ opicsId: trade.opicsId })),
+    totalNoOfAtps: totalAtps,
+    atps: [{
+      // If cumulative data has a companyName, set atpID to null; otherwise use atpID from Preview Data
+      atpId: cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId,
+      referenceDocId: atp?.referenceDocId || null,
+      name: atp?.name || 'ATP 1',
+
+      details: {
+        ...atp?.details,
+        contactInfo: atp?.details?.contactInfo // Ensure contactInfo is used
+      },
+      purpose: {
+        ...atp?.purpose,
+        principle: atp?.purpose?.principle, // Ensure principal is used
+      },
+
+      fxDisposition: {
+        ...atp?.fxDisposition,
+        eventualRemittance: atp?.fxDisposition?.eventualRemittance, // Ensure eventualRemittance is used
+      },
+      intendedBeneficiary: atp?.intendedBeneficiary,
+    }],
+  };
+
+  delete atpData.atps[0]?.details?.sumOfBuyAmounts;
+  delete atpData.atps[0]?.supportingDocs;
+
+  // Convert empty strings to null in the payload
+  const processedPayload = preparePayload(atpData);
+
+  // Generate the download URL
+  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
+
+  // Dispatch the processed payload
+  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
+};
+export const handleSelectedSections = (sections, previewPageActions, trades) => {
+  if (trades.length === 1) {
+    previewPageActions.onAccordionSelect(0);
+  } else {
+    previewPageActions.onAccordionSelect(sections[0]);
+  }
+};
+
+const getSingleAtpSections = (ATP) => {
+  return (
+    <div style={{ padding: '0px 20px' }}>
+      <FxDetails details={ATP?.details} />
+      <PurposeForm atps={ATP?.purpose} details={ATP?.details} />
+      <FxDisposition fxDisposition={ATP?.fxDisposition} />
+      <IntendedBeneficiary intendedBeneficiary={ATP?.intendedBeneficiary} />
+      <SupportForm supportingDocs={ATP?.supportingDocs} />
+    </div>
   );
+};
 
-  const handleDownloadATPCallback = (e, atp, index) => {
-    e.stopPropagation(); // Prevent event propagation
-    const referenceNumber = atp.referenceNumber || 'Unknown'; // Fallback if no reference number exists
-    const filename = generateFilename(referenceNumber, index);
-    handleDownloadAtpCallBack(filename); // Pass the filename to the callback
+const CardView = ({ trades, previewPageActions, apiConfiguration, preview,
+  cummulative }) => {
+  const dispatch = useDispatch();
+
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+  useEffect(() => {
+    if (trades.length === 1) {
+      previewPageActions.onAccordionSelect(0);
+    } else {
+      previewPageActions.onAccordionSelect('');
+    }
+    return () => {
+      previewPageActions.onAccordionSelect(0);
+    };
+  }, [trades.length, previewPageActions]);
+
+  const handleDownloadAtpCallBack = useCallback((label) => {
+    handleDownloadATP(apiConfiguration, trades, cummulative, preview, label, dispatch);
+  }, [apiConfiguration, trades, cummulative, preview, dispatch]);
+
+  const header1 = {
+    cardNumber: 1,
+    title: <PreviewHeading>Transaction Details</PreviewHeading>,
   };
 
-  const multiAtpLabel = (atp, index) => {
-    return (
-      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
-          <span>{atp.name}</span>
-        </AccordionCol>
-        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
-          <Button
-            data-testid={`button-submit-${index}`}
-            variant="small"
-            buttonType="link"
-            onClick={(e) => handleDownloadATPCallback(e, atp, index)}
-            leftIconName="ic_upload"
-          >
-            Download ATP
-          </Button>
-        </AccordionCol>
-      </AccordionRow>
-    );
+  const header2 = {
+    cardNumber: 2,
+    title: (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div><PreviewHeading>Purchase Application</PreviewHeading></div>
+        {
+          selectedATPS?.length <= 1 && <div>
+            <Button
+              data-testid="button-submit"
+              variant="small"
+              buttonType="link"
+              onClick={handleDownloadAtpCallBack}
+              leftIconName="ic_upload"
+            >
+              Download ATP
+            </Button>
+          </div>
+        }
+      </div>
+    ),
   };
+
+  const isSingleOpen = true;
+
+  const icons = { close: 'ic_chevron_down', open: 'ic_chevron_right' };
 
   return (
-    <MultiAtpLabelStyle>
-      <Accordion
-        theme="blue"
-        variant="contained"
-        iconPosition="left"
-        isSingleOpen={isSingleOpen}
-        icons={icons}
-        selectedSections={handleSelectedSections}
-        defaultCheckedSections={[0]}
-      >
-        {selectedATPS
-          ? selectedATPS.map((atp, index) => (
-              <AccordionTitle
-                key={atp.name}
-                label={multiAtpLabel(atp, index)}
-              >
-                {callEachAtp(atp)}
-              </AccordionTitle>
-            ))
-          : ''}
-      </Accordion>
-    </MultiAtpLabelStyle>
+    <>
+      <Card header={header1}>
+
+        <AccordionTitle>
+          <Accordion
+            isSingleOpen={isSingleOpen}
+            icons={icons}
+            handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
+            defaultCheckedSections={[0]}
+            trades={trades}
+            label="ATP1"
+          />
+        </AccordionTitle>
+      </Card>
+
+      <div style={{ marginTop: '-50px' }}>
+        <Card header={header2}>
+
+          {selectedATPS?.length > 1 ?
+            <div style={{ padding: '0px 20px' }}>
+              <MultiAccordion
+                isSingleOpen={isSingleOpen}
+                icons={icons}
+                handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
+                defaultCheckedSections={[0]}
+                getSingleATPSections={getSingleAtpSections}
+                handleDownloadAtpCallBack={handleDownloadAtpCallBack}
+              />
+
+              {/* </MultiAccordion> */}
+            </div>
+            : getSingleAtpSections(selectedATPS[0])
+          }
+        </Card>
+      </div>
+    </>
   );
 };
 
@@ -81,25 +235,22 @@ const mapStateToProps = (state) => ({
   preview: previewPageDataSelector(state)
 });
 
-MultiAccordion.propTypes = {
-  cummulative: PropTypes.shape({
-    atps: PropTypes.arrayOf(PropTypes.shape({
-      referenceNumber: PropTypes.string, // Ensure this is defined in the ATP object
-      name: PropTypes.string
-    }))
-  }),
+CardView.propTypes = {
+  trades: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    opicsId: PropTypes.string.isRequired, // Ensure opicsId is required
+  })).isRequired,
+  previewPageActions: PropTypes.shape({
+    onAccordionSelect: PropTypes.func.isRequired,
+  }).isRequired,
   preview: PropTypes.shape({
     previewRoutedFrom: PropTypes.string,
-    atpsCollective: PropTypes.arrayOf(PropTypes.shape({
-      referenceNumber: PropTypes.string, // Ensure this is defined in the ATP object
-      name: PropTypes.string
-    }))
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
   }),
-  icons: PropTypes.bool,
-  isSingleOpen: PropTypes.bool,
-  handleSelectedSections: PropTypes.func,
-  getSingleATPSections: PropTypes.func,
-  handleDownloadAtpCallBack: PropTypes.func.isRequired, // Callback to handle download
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
+  }),
+  apiConfiguration: PropTypes.shape({})
 };
 
-export default connect(mapStateToProps)(MultiAccordion);
+export default connect(mapStateToProps)(CardView);
