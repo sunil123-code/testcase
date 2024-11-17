@@ -1,36 +1,80 @@
+import { Accordion, Button } from 'uds-core';
+import PropTypes from 'prop-types';
+import { connect } from 'react-redux';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import { previewPageDataSelector } from '../../selectors/previewPage';
+import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
 
+const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+  // const selectedATPS = preview.previewRoutedFrom === "ATP-Page" ? cummulative : cummulative
+  const callEachAtp = (atp) => (
+    getSingleATPSections(atp)
+  );
 
-const header2 = {
-  cardNumber: 2,
-  title: (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        width: '100%',
-      }}
-    >
-      <div>
-        <PreviewHeading>Purchase Application</PreviewHeading>
-      </div>
-      {selectedATPS?.length <= 1 && (
-        <div>
+  const handleDownloadATPCallback = (e, label) => {
+    e.stopPropagation();
+    handleDownloadAtpCallBack(label);
+  };
+
+  const multiAtpLabel = (label) => {
+    return (
+      <AccordionRow>
+        <AccordionCol>
+          <span>{label}</span>
+        </AccordionCol>
+        <AccordionCol>
           <Button
             data-testid="button-submit"
             variant="small"
             buttonType="link"
-            onClick={(event) => {
-              event.stopPropagation(); // Prevent event propagation
-              handleDownloadAtpCallBack();
-            }}
+            // className='xxxx'
+            onClick={(e) => handleDownloadATPCallback(e, label)}
             leftIconName="ic_upload"
-            style={{ position: 'relative', zIndex: 10 }}
+            style={{ justifyContent: 'right' }}
           >
-            Download ATP
+              Download ATP
           </Button>
-        </div>
-      )}
-    </div>
-  ),
+        </AccordionCol>
+      </AccordionRow>
+    );
+  };
+  return (
+    <MultiAtpLabelStyle>
+      <Accordion
+        theme="blue"
+        variant="contained"
+        iconPosition="left"
+        isSingleOpen={isSingleOpen}
+        icons={icons}
+        selectedSections={handleSelectedSections}
+        defaultCheckedSections={[0]}
+      >
+        {selectedATPS ? selectedATPS.map(atp =>
+          <AccordionTitle key={atp.name} label={multiAtpLabel(atp.name)}>{callEachAtp(atp)}</AccordionTitle>) : ''
+        }
+
+      </Accordion>
+    </MultiAtpLabelStyle>
+  );
 };
+
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state)
+});
+MultiAccordion.propTypes = {
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
+  }),
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
+  }),
+  icons: PropTypes.bool,
+  isSingleOpen: PropTypes.bool,
+  handleSelectedSections: PropTypes.func,
+  getSingleATPSections: PropTypes.func,
+};
+
+export default connect(mapStateToProps)(MultiAccordion);
