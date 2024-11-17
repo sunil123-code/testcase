@@ -1,28 +1,105 @@
 
 
-export const cummulativeSelector = createSelector(
-  [tradeSelector, addMultiAtpSelector],
-  (trades, multiAtp) => {
-    const atps = multiAtp?.atps ?? [];
+import { Accordion, Button } from 'uds-core';
+import PropTypes from 'prop-types';
+import { connect } from 'react-redux';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import { previewPageDataSelector } from '../../selectors/previewPage';
+import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
 
-    // Add null values for empty fields when data comes from multiAtp
-    atps.forEach(atp => {
-      Object.keys(atp).forEach(key => {
-        if (atp[key] === '') {
-          atp[key] = null;
-        }
-      });
-    });
+const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
 
-    return {
-      trades: trades.map((trade) => ({
-        opicsId: trade.opicsId,
-        tradeDate: trade.tradeDate,
-        valueDate: trade.valueDate,
-        sellAmount: trade.sellAmount,
-        sellCurrency: trade.sellCurrency
-      })),
-      atps,
-    };
-  },
-);
+  // Utility to generate the filename
+  const generateFilename = (referenceNumber, index) => {
+    const now = new Date();
+    const yyyymmdd = now.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+    const tttt = now.toTimeString().slice(0, 5).replace(':', ''); // HHMM
+    return `ATP-${referenceNumber}-${index + 1}-${yyyymmdd}${tttt}`;
+  };
+
+  const callEachAtp = (atp) => (
+    getSingleATPSections(atp)
+  );
+
+  const handleDownloadATPCallback = (e, atp, index) => {
+    e.stopPropagation(); // Prevent event propagation
+    const referenceNumber = atp.referenceNumber || 'Unknown'; // Fallback if no reference number exists
+    const filename = generateFilename(referenceNumber, index);
+    handleDownloadAtpCallBack(filename); // Pass the filename to the callback
+  };
+
+  const multiAtpLabel = (atp, index) => {
+    return (
+      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
+          <span>{atp.name}</span>
+        </AccordionCol>
+        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
+          <Button
+            data-testid={`button-submit-${index}`}
+            variant="small"
+            buttonType="link"
+            onClick={(e) => handleDownloadATPCallback(e, atp, index)}
+            leftIconName="ic_upload"
+          >
+            Download ATP
+          </Button>
+        </AccordionCol>
+      </AccordionRow>
+    );
+  };
+
+  return (
+    <MultiAtpLabelStyle>
+      <Accordion
+        theme="blue"
+        variant="contained"
+        iconPosition="left"
+        isSingleOpen={isSingleOpen}
+        icons={icons}
+        selectedSections={handleSelectedSections}
+        defaultCheckedSections={[0]}
+      >
+        {selectedATPS
+          ? selectedATPS.map((atp, index) => (
+              <AccordionTitle
+                key={atp.name}
+                label={multiAtpLabel(atp, index)}
+              >
+                {callEachAtp(atp)}
+              </AccordionTitle>
+            ))
+          : ''}
+      </Accordion>
+    </MultiAtpLabelStyle>
+  );
+};
+
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state)
+});
+
+MultiAccordion.propTypes = {
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape({
+      referenceNumber: PropTypes.string, // Ensure this is defined in the ATP object
+      name: PropTypes.string
+    }))
+  }),
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({
+      referenceNumber: PropTypes.string, // Ensure this is defined in the ATP object
+      name: PropTypes.string
+    }))
+  }),
+  icons: PropTypes.bool,
+  isSingleOpen: PropTypes.bool,
+  handleSelectedSections: PropTypes.func,
+  getSingleATPSections: PropTypes.func,
+  handleDownloadAtpCallBack: PropTypes.func.isRequired, // Callback to handle download
+};
+
+export default connect(mapStateToProps)(MultiAccordion);
