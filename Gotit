@@ -78,3 +78,116 @@ MultiAccordion.propTypes = {
 };
 
 export default connect(mapStateToProps)(MultiAccordion);
+
+
+
+import { Accordion, Button } from 'uds-core';
+import PropTypes from 'prop-types';
+import { connect } from 'react-redux';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import { previewPageDataSelector } from '../../selectors/previewPage';
+import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
+
+const MultiAccordion = ({
+  isSingleOpen,
+  icons,
+  handleSelectedSections,
+  cummulative,
+  preview,
+  getSingleATPSections,
+  handleDownloadAtpCallBack,
+}) => {
+  const selectedATPS =
+    preview.previewRoutedFrom === 'ATP-Page'
+      ? cummulative?.atps
+      : preview?.atpsCollective;
+
+  const callEachAtp = (atp) => getSingleATPSections(atp);
+
+  const handleDownloadATPCallback = (e, label) => {
+    e.stopPropagation(); // Prevents event propagation to parent elements
+    handleDownloadAtpCallBack(label);
+  };
+
+  const multiAtpLabel = (label) => {
+    return (
+      <AccordionRow>
+        <AccordionCol>
+          <span>{label}</span>
+        </AccordionCol>
+        <AccordionCol>
+          <Button
+            data-testid="button-submit"
+            variant="small"
+            buttonType="link"
+            onClick={(e) => handleDownloadATPCallback(e, label)}
+            leftIconName="ic_upload"
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+            }}
+          >
+            Download ATP
+          </Button>
+        </AccordionCol>
+      </AccordionRow>
+    );
+  };
+
+  return (
+    <MultiAtpLabelStyle>
+      <Accordion
+        theme="blue"
+        variant="contained"
+        iconPosition="left"
+        isSingleOpen={isSingleOpen}
+        icons={icons}
+        selectedSections={handleSelectedSections}
+        defaultCheckedSections={[0]}
+      >
+        {selectedATPS
+          ? selectedATPS.map((atp) => (
+              <AccordionTitle
+                key={atp.name}
+                label={multiAtpLabel(atp.name)}
+              >
+                {callEachAtp(atp)}
+              </AccordionTitle>
+            ))
+          : ''}
+      </Accordion>
+    </MultiAtpLabelStyle>
+  );
+};
+
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state),
+});
+
+MultiAccordion.propTypes = {
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape({})),
+  }),
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({})),
+  }),
+  icons: PropTypes.bool,
+  isSingleOpen: PropTypes.bool,
+  handleSelectedSections: PropTypes.func,
+  getSingleATPSections: PropTypes.func,
+  handleDownloadAtpCallBack: PropTypes.func.isRequired, // Ensures this function is always provided
+};
+
+export default connect(mapStateToProps)(MultiAccordion);
+
+
+
+
+
+
+
+
+
