@@ -254,3 +254,8 @@ CardView.propTypes = {
 };
 
 export default connect(mapStateToProps)(CardView);
+
+
+now i have a task when cummulative have only one json object the file name should be "ATP-4223331-202410071845" like this 
+when it has more then 1 json object the the file name should be "ATP-4223331-1-202410071845" like this .
+ 
