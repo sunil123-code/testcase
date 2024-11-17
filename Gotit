@@ -1,0 +1,36 @@
+
+
+const header2 = {
+  cardNumber: 2,
+  title: (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        width: '100%',
+      }}
+    >
+      <div>
+        <PreviewHeading>Purchase Application</PreviewHeading>
+      </div>
+      {selectedATPS?.length <= 1 && (
+        <div>
+          <Button
+            data-testid="button-submit"
+            variant="small"
+            buttonType="link"
+            onClick={(event) => {
+              event.stopPropagation(); // Prevent event propagation
+              handleDownloadAtpCallBack();
+            }}
+            leftIconName="ic_upload"
+            style={{ position: 'relative', zIndex: 10 }}
+          >
+            Download ATP
+          </Button>
+        </div>
+      )}
+    </div>
+  ),
+};
