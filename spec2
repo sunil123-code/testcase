@@ -1,14 +1,101 @@
 
-  <Button
-    onClick={() => {
-      alert('I am clicked');
-    }}
-    leftIconName={'ic_plus'}
-    buttonType={'primary'}
-    disabled={false}
-    variant={'iconText'}
-    isLoading={true}
-    showContentAlways={true}
-  >
-    New Transaction
-  </Button>
+
+export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
+  if (!trades || trades.length === 0) {
+    // eslint-disable-next-line no-console
+    return;
+  }
+
+  const now = new Date();
+  const timestamp =
+    `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
+
+  // Assume the reference number is the opicsId from the first trade in the preview data
+  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId; // Fallback to first trade if no preview
+
+  let filename = '';
+
+  // Logic for Single FX to Multi ATP
+  if (trades.length === 1 && cumulative?.atps?.length > 1) {
+    // For Single FX linked to Multiple ATPs, add numbering for each ATP
+    filename = `ATP-${filenameReferenceNumber}-${cumulative?.atps?.findIndex(atp => atp === label) + 1}-${timestamp}`;
+  }
+  // Logic for Single FX to Single ATP
+  else if (trades.length === 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  }
+  // Logic for Multi FX to Single ATP
+  else if (trades.length > 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-MultiFX-${timestamp}`;
+  }
+  // Logic for Multi FX to Multi ATP (handle this case if needed)
+  else if (trades.length > 1 && cumulative?.atps?.length > 1) {
+    filename = `ATP-MultiFX-${timestamp}`;
+  }
+
+  // Use the preview data filename logic if there are multiple atps in the preview data
+  if (preview?.atpsCollective?.length > 1) {
+    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
+  } else if (preview?.atpsCollective?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  }
+
+  // Handle cumulative data (keep existing functionality)
+  let atpTradeList = [];
+  let totalAtps = 0;
+  let atp = {};
+
+  // If preview data exists, use that instead
+  if (cumulative?.atps?.[0]?.details?.companyName) {
+    atpTradeList = trades; // Cumulative ATP trade list
+  } else {
+    atpTradeList = preview.tradesCollective; // Take only the first object for preview
+  }
+
+  if (cumulative?.atps?.[0]?.details?.companyName) {
+    atp = cumulative.atps[0]; // Cumulative ATP list
+    totalAtps = cumulative.atps.length;
+  } else {
+    atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective.filter(item => item.name === label)[0];
+    totalAtps = preview?.atpsCollective?.length;
+  }
+
+  // Format the data to be sent in JSON, excluding supportingDocs and taking only the first object
+  const atpData = {
+    trades: atpTradeList.map(trade => ({ opicsId: trade.opicsId })),
+    totalNoOfAtps: totalAtps,
+    atps: [{
+      // If cumulative data has a companyName, set atpID to null; otherwise use atpID from Preview Data
+      atpId: cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId,
+      referenceDocId: atp?.referenceDocId || null,
+      name: atp?.name || 'ATP 1',
+
+      details: {
+        ...atp?.details,
+        contactInfo: atp?.details?.contactInfo // Ensure contactInfo is used
+      },
+      purpose: {
+        ...atp?.purpose,
+        principle: atp?.purpose?.principle, // Ensure principal is used
+      },
+
+      fxDisposition: {
+        ...atp?.fxDisposition,
+        eventualRemittance: atp?.fxDisposition?.eventualRemittance, // Ensure eventualRemittance is used
+      },
+      intendedBeneficiary: atp?.intendedBeneficiary,
+    }],
+  };
+
+  delete atpData.atps[0]?.details?.sumOfBuyAmounts;
+  delete atpData.atps[0]?.supportingDocs;
+
+  // Convert empty strings to null in the payload
+  const processedPayload = preparePayload(atpData);
+
+  // Generate the download URL
+  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
+
+  // Dispatch the processed payload with the constructed filename
+  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
+};
