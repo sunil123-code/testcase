@@ -1,87 +1,27 @@
+For a single FX to Single ATP
+Filename: "ATP-" + "Reference Number generated in the PDF" + "-date&timestamp"
+date&timestamp is written in yyyymmddtttt format.
 
+Example:
+Trade 4223331 is linked to 1 ATP.
+User downloads file on 2024 October 07 at time 1845.
+Filename is "ATP-4223331-202410071845"
 
-export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
-  if (!trades || trades.length === 0) {
-    // eslint-disable-next-line no-console
-    return;
-  }
+For a single FX to Multi ATP
+Filename: "ATP-" + "Reference Number generated in the PDF" + "-date&timestamp"
+date&timestamp is written in yyyymmddtttt format.
 
-  const now = new Date();
-  const timestamp =
-    `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
+Example:
+Trade 4223331 is linked to 2 ATP.
+User downloads file on 2024 October 07 at time 1845.
+For one of the ATP, the Filename is "ATP-4223331-1-202410071845"
+While the other ATP PDF will have the filename is "ATP-4223331-2-202410071845"
 
-  // Assume the reference number is the opicsId from the first trade in the preview data
-  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId; // Fallback to first trade if no preview
+For a Mutli FX to Single ATP
+Filename: "ATP-MultiFX" + "-date&timestamp"
+date&timestamp is written in yyyymmddtttt format.
 
-  // Determine the filename based on the number of objects in cummulative.atps
-  let filename = '';
-  if (cumulative?.atps?.length === 1) {
-    // If there is only one object in cummulative.atps, filename is `ATP-<ReferenceNumber>-<timestamp>`
-    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
-  } else if (cumulative?.atps?.length > 1) {
-    // If there are multiple objects in cummulative.atps, filename is `ATP-<ReferenceNumber>-1-<timestamp>`
-    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
-  } else {
-    // Fallback filename for other cases
-    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
-  }
-
-  // Handle cumulative data (keep existing functionality)
-  let atpTradeList = [];
-  let totalAtps = 0;
-  let atp = {};
-
-  // If preview data exists, use that instead
-  if (cumulative?.atps?.[0]?.details?.companyName) {
-    atpTradeList = trades; // Cumulative ATP trade list
-  } else {
-    atpTradeList = preview.tradesCollective; // Take only the first object for preview
-  }
-
-  if (cumulative?.atps?.[0]?.details?.companyName) {
-    atp = cumulative.atps[0]; // Cumulative ATP list
-    totalAtps = cumulative.atps.length;
-  } else {
-    atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective.filter(item => item.name === label)[0];
-    totalAtps = preview?.atpsCollective?.length;
-  }
-
-  // Format the data to be sent in JSON, excluding supportingDocs and taking only the first object
-  const atpData = {
-    trades: atpTradeList.map(trade => ({ opicsId: trade.opicsId })),
-    totalNoOfAtps: totalAtps,
-    atps: [{
-      // If cumulative data has a companyName, set atpID to null; otherwise use atpID from Preview Data
-      atpId: cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId,
-      referenceDocId: atp?.referenceDocId || null,
-      name: atp?.name || 'ATP 1',
-
-      details: {
-        ...atp?.details,
-        contactInfo: atp?.details?.contactInfo // Ensure contactInfo is used
-      },
-      purpose: {
-        ...atp?.purpose,
-        principle: atp?.purpose?.principle, // Ensure principal is used
-      },
-
-      fxDisposition: {
-        ...atp?.fxDisposition,
-        eventualRemittance: atp?.fxDisposition?.eventualRemittance, // Ensure eventualRemittance is used
-      },
-      intendedBeneficiary: atp?.intendedBeneficiary,
-    }],
-  };
-
-  delete atpData.atps[0]?.details?.sumOfBuyAmounts;
-  delete atpData.atps[0]?.supportingDocs;
-
-  // Convert empty strings to null in the payload
-  const processedPayload = preparePayload(atpData);
-
-  // Generate the download URL
-  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
-
-  // Dispatch the processed payload
-  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
-};
+Example:
+Trade 4223331, 4223332, 4226661 is linked to 1 ATP.
+User downloads file on 2024 October 07 at time 1845.
+Filename is "ATP-MultiFX-202410071845"
