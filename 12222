@@ -1,1 +1,1 @@
-my task is wheni click on download atp in index.js the it will go to card.js it will take filename acordingly when i get the data in cumilative when there is 2 or more ATP in one FX then the there will be two are more json the we have to map json 1 to atp1 the json2 to atp2 the json 3 to atp 3 like this the when i click on download atp in index.js then data should be in consun atps
+we have download atp in two page when i click on download atp in index file the full cumuative data is not going to download atp data so send it as payload to download atp
