@@ -1,113 +1,79 @@
+export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
+  if (!trades || trades.length === 0) {
+    console.error("No trades available to process ATP download.");
+    return;
+  }
 
+  // Use the generateFilename method
+  const filename = generateFilename(trades, cumulative, preview);
 
-import { Accordion, Button } from 'uds-core';
-import PropTypes from 'prop-types';
-import { connect } from 'react-redux';
-import { cummulativeSelector } from '../../selectors/cummulativeSelector';
-import { previewPageDataSelector } from '../../selectors/previewPage';
-import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
+  let atpData = {};
 
-const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
-  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+  // If cumulative data exists and is triggered, send the full cumulative data
+  if (cumulative?.atps?.length > 0) {
+    atpData = {
+      trades: trades.map(trade => ({ opicsId: trade.opicsId })),
+      totalNoOfAtps: cumulative.atps.length,
+      atps: cumulative.atps.map(atp => ({
+        atpId: atp?.details?.atpId || null,
+        referenceDocId: atp?.referenceDocId || null,
+        name: atp?.name || 'ATP',
+        details: { ...atp.details },
+        purpose: { ...atp.purpose },
+        fxDisposition: { ...atp.fxDisposition },
+        intendedBeneficiary: { ...atp.intendedBeneficiary },
+      })),
+    };
+  } else if (preview?.atpsCollective?.length > 0) {
+    // Use preview data as fallback
+    const atp = typeof label === 'object' 
+      ? preview?.atpsCollective?.[0] 
+      : preview?.atpsCollective.find(item => item.name === label);
 
-  // Utility to generate the filename with index always as 1
-  const generateFilename = (referenceNumber) => {
-    const now = new Date();
-    const yyyymmdd = now.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
-    const tttt = now.toTimeString().slice(0, 5).replace(':', ''); // HHMM
+    atpData = {
+      trades: trades.map(trade => ({ opicsId: trade.opicsId })),
+      totalNoOfAtps: preview?.atpsCollective?.length || 0,
+      atps: [{
+        atpId: atp?.atpId,
+        referenceDocId: atp?.referenceDocId || null,
+        name: atp?.name || 'ATP 1',
+        details: { ...atp?.details },
+        purpose: { ...atp?.purpose },
+        fxDisposition: { ...atp?.fxDisposition },
+        intendedBeneficiary: atp?.intendedBeneficiary,
+      }],
+    };
+  } else {
+    console.error("No ATP data available for download.");
+    return;
+  }
 
-    // Always set index as 1
-    const index = 1;
+  // Remove unwanted fields and convert empty values to null
+  atpData.atps.forEach(atp => {
+    delete atp.details?.sumOfBuyAmounts;
+    delete atp.supportingDocs;
+  });
 
-    // Create the filename as "ATP-{referenceNumber}-{index}-{yyyymmddtttt}"
-    return `ATP-${referenceNumber}-${index}-${yyyymmdd}${tttt}`;
-  };
+  const processedPayload = preparePayload(atpData);
 
-  const callEachAtp = (atp) => (
-    getSingleATPSections(atp)
-  );
+  // Generate the download URL
+  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
 
-  const handleMultiDownloadAtpCallback = (e, atps) => {
-    e.stopPropagation(); // Prevent event propagation
-
-    // Loop over each ATP and trigger the download for each
-    atps.forEach((atp) => {
-      const referenceNumber = atp.referenceNumber || 'Unknown'; // Fallback if no reference number exists
-      const filename = generateFilename(referenceNumber); // Generate filename with index 1
-      handleDownloadAtpCallBack(filename); // Pass the filename to the callback
-    });
-  };
-
-  const multiAtpLabel = (atps) => {
-    return (
-      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
-          <span>Download All ATPs</span>
-        </AccordionCol>
-        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
-          <Button
-            variant="small"
-            buttonType="link"
-            onClick={(e) => handleMultiDownloadAtpCallback(e, atps)}
-            leftIconName="ic_upload"
-          >
-            Download All ATPs
-          </Button>
-        </AccordionCol>
-      </AccordionRow>
-    );
-  };
-
-  return (
-    <MultiAtpLabelStyle>
-      <Accordion
-        theme="blue"
-        variant="contained"
-        iconPosition="left"
-        isSingleOpen={isSingleOpen}
-        icons={icons}
-        selectedSections={handleSelectedSections}
-        defaultCheckedSections={[0]}
-      >
-        {selectedATPS
-          ? selectedATPS.map((atp, index) => (
-              <AccordionTitle
-                key={atp.name}
-                label={multiAtpLabel(selectedATPS)} // Pass the full list of selected ATPs
-              >
-                {callEachAtp(atp)}
-              </AccordionTitle>
-            ))
-          : ''}
-      </Accordion>
-    </MultiAtpLabelStyle>
-  );
+  // Dispatch the download action
+  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
 };
+=============================
 
-const mapStateToProps = (state) => ({
-  cummulative: cummulativeSelector(state),
-  preview: previewPageDataSelector(state)
-});
 
-MultiAccordion.propTypes = {
-  cummulative: PropTypes.shape({
-    atps: PropTypes.arrayOf(PropTypes.shape({
-      referenceNumber: PropTypes.string, // Ensure this is defined in the ATP object
-      name: PropTypes.string
-    }))
-  }),
-  preview: PropTypes.shape({
-    previewRoutedFrom: PropTypes.string,
-    atpsCollective: PropTypes.arrayOf(PropTypes.shape({
-      referenceNumber: PropTypes.string, // Ensure this is defined in the ATP object
-      name: PropTypes.string
-    }))
-  }),
-  icons: PropTypes.bool,
-  isSingleOpen: PropTypes.bool,
-  handleSelectedSections: PropTypes.func,
-  getSingleATPSections: PropTypes.func,
-  handleDownloadAtpCallBack: PropTypes.func.isRequired, // Callback to handle download
+
+const handleDownloadAtpCallBack = useCallback((label) => {
+  handleDownloadATP(apiConfiguration, trades, cummulative, preview, label, dispatch);
+}, [apiConfiguration, trades, cummulative, preview, dispatch]);
+
+
+======================
+
+const handleDownloadATPCallback = (e, label) => {
+  e.stopPropagation();
+  handleDownloadAtpCallBack(label);
 };
-
-export default connect(mapStateToProps)(MultiAccordion);
