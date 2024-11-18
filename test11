@@ -1,72 +1,76 @@
-import { useEffect, useCallback } from 'react';
-import { Card, Button } from 'uds-core';
-import { connect, useDispatch } from 'react-redux';
-import PropTypes from 'prop-types';
+import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
 
-import Accordion from '../../components/Accordion';
-import { cummulativeSelector } from '../../selectors/cummulativeSelector';
-import {
+const MultiAccordion = ({
+  isSingleOpen,
+  icons,
+  handleSelectedSections,
+  cummulative,
+  preview,
+  getSingleATPSections,
+  handleDownloadAtpCallBack
+}) => {
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
 
-  AccordionTitle,
-} from '../../style/common.styles';
+  const callEachAtp = (atp) => getSingleATPSections(atp);
 
-import { getURL } from '../../common/utils/actionHelper';
-import { API_NAME } from '../../common/constants/constants'; // Ensure you import other necessary constants 
-import endpoints from '../../apis/endpoints';
-import { onDownloadeAtp } from '../../actions/previewPage/creators';
-import MultiAccordion from '../../components/MultiAccordion';
-import PurposeForm from './purposeForm/view';
-import SupportForm from './supportForm/view';
-import FxDetails from './fxDetails/view';
-import FxDisposition from './fxDisposition/view';
-import IntendedBeneficiary from './intendedBeneficiary/view';
-import { PreviewHeading } from './style';
-import { previewPageDataSelector } from '../../selectors/previewPage';
+  const handleDownloadATPCallback = (e, atpName) => {
+    e.stopPropagation();
+    // Find the ATP data by matching the ATP name from the cummulative or preview data
+    const atpData = cummulative?.atps?.find((atp) => atp.name === atpName) || preview?.atpsCollective?.find((atp) => atp.name === atpName);
 
-// New method for generating filename
-export const generateFilename = (trades, cumulative, preview) => {
-  const now = new Date();
-  const timestamp =
-    `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
-
-  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId;
-
-  let filename = '';
-
-  if (trades.length === 1 && cumulative?.atps?.length > 1) {
-    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
-  } else if (trades.length === 1 && cumulative?.atps?.length === 1) {
-    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
-  } else if (trades.length > 1 && cumulative?.atps?.length === 1) {
-    filename = `ATP-MultiFX-${timestamp}`;
-  }
-
-  if (preview?.atpsCollective?.length > 1) {
-    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
-  } else if (preview?.atpsCollective?.length === 1) {
-    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
-  }
-
-  return filename;
-};
-
-const preparePayload = (data) => {
-  const convertEmptyToNull = (obj) => {
-    const newObj = Array.isArray(obj) ? [] : {}; // Maintain array structure if obj is an array
-    Object.keys(obj).forEach(key => {
-      if (obj[key] === '') {
-        newObj[key] = null;
-      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-        newObj[key] = convertEmptyToNull(obj[key]); // Recursively process nested objects
-      } else {
-        newObj[key] = obj[key];
-      }
-    });
-    return newObj;
+    if (atpData) {
+      handleDownloadAtpCallBack(atpData);  // Pass the matched ATP data to the callback function
+    } else {
+      console.error("ATP not found for the selected name.");
+    }
   };
 
-  return convertEmptyToNull(data);
+  const multiAtpLabel = (atp) => {
+    return (
+      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
+          <span>{atp.name}</span> {/* Display the ATP name */}
+        </AccordionCol>
+        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
+          <Button
+            data-testid="button-submit"
+            variant="small"
+            buttonType="link"
+            onClick={(e) => handleDownloadATPCallback(e, atp.name)} // Pass the ATP name to filter and download
+            leftIconName="ic_download"
+          >
+            Download {atp.name || 'ATP'} {/* Dynamically set the button text */}
+          </Button>
+        </AccordionCol>
+      </AccordionRow>
+    );
+  };
+
+  return (
+    <MultiAtpLabelStyle>
+      <Accordion
+        theme="blue"
+        variant="contained"
+        iconPosition="left"
+        isSingleOpen={isSingleOpen}
+        icons={icons}
+        selectedSections={handleSelectedSections}
+        defaultCheckedSections={[0]}
+      >
+        {selectedATPS && selectedATPS.length > 0 ? (
+          selectedATPS.map((atp) => (
+            <AccordionTitle key={atp.name || atp.atpId} label={multiAtpLabel(atp)}>
+              {callEachAtp(atp)}
+            </AccordionTitle>
+          ))
+        ) : (
+          <div>No ATPs available to display</div>  {/* Show a message if no ATPs */}
+        )}
+      </Accordion>
+    </MultiAtpLabelStyle>
+  );
 };
+===============================
 
 export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
   if (!trades || trades.length === 0) {
@@ -74,194 +78,62 @@ export const handleDownloadATP = (configuration, trades, cumulative, preview, la
     console.error("No trades available to process ATP download.");
     return;
   }
-  
-// Use the new generateFilename method
+
+  // Use the new generateFilename method
   const filename = generateFilename(trades, cumulative, preview);
 
-   let atpData = {};
+  let atpData = {};
 
-// If preview data exists, use that instead
-if (cumulative?.atps?.length > 0) {
-  atpData = {
-    trades: trades.map(trade => ({ opicsId: trade.opicsId })),
-    totalNoOfAtps: cumulative.atps.length,
-    atps: cumulative.atps.map(atp => ({
-      atpId: atp?.details?.atpId || null,
-      referenceDocId: atp?.referenceDocId || null,
-      name: atp?.name || 'ATP',
-      details: { ...atp.details },
-      purpose: { ...atp.purpose },
-      fxDisposition: { ...atp.fxDisposition },
-      intendedBeneficiary: { ...atp.intendedBeneficiary },
-    })),
-  };
-} else if (preview?.atpsCollective?.length > 0) {
-  // Use preview data as fallback
-  const atp = typeof label === 'object' 
-    ? preview?.atpsCollective?.[0] 
-    : preview?.atpsCollective.find(item => item.name === label);
+  // If preview data exists, use that instead
+  if (cumulative?.atps?.length > 0) {
+    atpData = {
+      trades: trades.map(trade => ({ opicsId: trade.opicsId })),
+      totalNoOfAtps: cumulative.atps.length,
+      atps: cumulative.atps.map(atp => ({
+        atpId: atp?.details?.atpId || null,
+        referenceDocId: atp?.referenceDocId || null,
+        name: atp?.name || 'ATP',
+        details: { ...atp.details },
+        purpose: { ...atp.purpose },
+        fxDisposition: { ...atp.fxDisposition },
+        intendedBeneficiary: { ...atp.intendedBeneficiary },
+      })),
+    };
+  } else if (preview?.atpsCollective?.length > 0) {
+    // Use preview data as fallback
+    const atp = typeof label === 'object'
+      ? preview?.atpsCollective?.[0]
+      : preview?.atpsCollective.find(item => item.name === label);
 
-  atpData = {
-    trades: trades.map(trade => ({ opicsId: trade.opicsId })),
-    totalNoOfAtps: preview?.atpsCollective?.length || 0,
-    atps: [{
-      atpId: atp?.atpId,
-      referenceDocId: atp?.referenceDocId || null,
-      name: atp?.name || 'ATP 1',
-      details: { ...atp?.details },
-      purpose: { ...atp?.purpose },
-      fxDisposition: { ...atp?.fxDisposition },
-      intendedBeneficiary: atp?.intendedBeneficiary,
-    }],
-  };
-} else {
-  console.error("No ATP data available for download.");
-  return;
-}
-atpData.atps.forEach(atp => {
-  delete atp.details?.sumOfBuyAmounts;
-  delete atp.supportingDocs;
-});
+    atpData = {
+      trades: trades.map(trade => ({ opicsId: trade.opicsId })),
+      totalNoOfAtps: preview?.atpsCollective?.length || 0,
+      atps: [{
+        atpId: atp?.atpId,
+        referenceDocId: atp?.referenceDocId || null,
+        name: atp?.name || 'ATP 1',
+        details: { ...atp?.details },
+        purpose: { ...atp?.purpose },
+        fxDisposition: { ...atp?.fxDisposition },
+        intendedBeneficiary: atp?.intendedBeneficiary,
+      }],
+    };
+  } else {
+    console.error("No ATP data available for download.");
+    return;
+  }
 
-// Convert empty strings to null in the payload
+  atpData.atps.forEach(atp => {
+    delete atp.details?.sumOfBuyAmounts;
+    delete atp.supportingDocs;
+  });
+
+  // Convert empty strings to null in the payload
   const processedPayload = preparePayload(atpData);
 
-// Generate the download URL
+  // Generate the download URL
   const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
 
-// Dispatch the processed payload with the constructed filename
+  // Dispatch the processed payload with the constructed filename
   dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
 };
-
-export const handleSelectedSections = (sections, previewPageActions, trades) => {
-  if (trades.length === 1) {
-    previewPageActions.onAccordionSelect(0);
-  } else {
-    previewPageActions.onAccordionSelect(sections[0]);
-  }
-};
-
-const getSingleAtpSections = (ATP) => {
-  return (
-    <div style={{ padding: '0px 20px' }}>
-      <FxDetails details={ATP?.details} />
-      <PurposeForm atps={ATP?.purpose} details={ATP?.details} />
-      <FxDisposition fxDisposition={ATP?.fxDisposition} />
-      <IntendedBeneficiary intendedBeneficiary={ATP?.intendedBeneficiary} />
-      <SupportForm supportingDocs={ATP?.supportingDocs} />
-    </div>
-  );
-};
-
-const CardView = ({ trades, previewPageActions, apiConfiguration, preview,
-  cummulative }) => {
-  const dispatch = useDispatch();
-  
-  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
-  useEffect(() => {
-    if (trades.length === 1) {
-      previewPageActions.onAccordionSelect(0);
-    } else {
-      previewPageActions.onAccordionSelect('');
-    }
-    return () => {
-      previewPageActions.onAccordionSelect(0);
-    };
-  }, [trades.length, previewPageActions]);
-
-  const handleDownloadAtpCallBack = useCallback((label) => {
-    handleDownloadATP(apiConfiguration, trades, cummulative, preview, label, dispatch);
-  }, [apiConfiguration, trades, cummulative, preview, dispatch]);
-  
-
-  const header1 = {
-    cardNumber: 1,
-    title: <PreviewHeading>Transaction Details</PreviewHeading>,
-  };
-
-  const header2 = {
-    cardNumber: 2,
-    title: (
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-        <div><PreviewHeading>Purchase Application</PreviewHeading></div>
-        {
-          selectedATPS?.length <= 1 && <div>
-            <Button
-              data-testid="button-submit"
-              variant="small"
-              buttonType="link"
-              onClick={handleDownloadAtpCallBack}
-              leftIconName="ic_download"
-            >
-              Download ATP
-            </Button>
-          </div>
-        }
-      </div>
-    ),
-  };
-
-  const isSingleOpen = true;
-
-  const icons = { close: 'ic_chevron_down', open: 'ic_chevron_right' };
-
-  return (
-    <>
-      <Card header={header1}>
-        <AccordionTitle>
-          <Accordion
-            isSingleOpen={isSingleOpen}
-            icons={icons}
-            handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
-            defaultCheckedSections={[0]}
-            trades={trades}
-            label="ATP1"
-          />
-        </AccordionTitle>
-      </Card>
-
-      <div style={{ marginTop: '-50px' }}>
-        <Card header={header2}>
-          {selectedATPS?.length > 1 ?
-            <div style={{ padding: '0px 20px' }}>
-              <MultiAccordion
-                isSingleOpen={isSingleOpen}
-                icons={icons}
-                handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
-                defaultCheckedSections={[0]}
-                getSingleATPSections={getSingleAtpSections}
-                handleDownloadAtpCallBack={handleDownloadAtpCallBack}
-              />
-            </div>
-            : getSingleAtpSections(selectedATPS[0])
-          }
-        </Card>
-      </div>
-    </>
-  );
-};
-
-const mapStateToProps = (state) => ({
-  cummulative: cummulativeSelector(state),
-  preview: previewPageDataSelector(state)
-});
-
-CardView.propTypes = {
-  trades: PropTypes.arrayOf(PropTypes.shape({
-    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-    opicsId: PropTypes.string.isRequired,
-  })).isRequired,
-  previewPageActions: PropTypes.shape({
-    onAccordionSelect: PropTypes.func.isRequired,
-  }).isRequired,
-  preview: PropTypes.shape({
-    previewRoutedFrom: PropTypes.string,
-    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
-  }),
-  cummulative: PropTypes.shape({
-    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
-  }),
-  apiConfiguration: PropTypes.shape({})
-};
-
-export default connect(mapStateToProps)(CardView);
