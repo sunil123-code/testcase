@@ -8,3 +8,116 @@
     const downloadAtp = screen.getByText(/Download ATP/i);
     fireEvent.click(downloadAtp);
     expect(wrapper).toMatchSnapshot();
+
+
+
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { HashRouter } from 'react-router-dom';
+import configureStore from 'redux-mock-store';
+import PreviewPage from './PreviewPage'; // Adjust the import path as needed
+import { handleDownloadATP } from './CardView';
+import { onDownloadeAtp } from '../../actions/previewPage/creators';
+
+jest.mock('../../actions/previewPage/creators', () => ({
+  onDownloadeAtp: jest.fn(),
+}));
+
+const mockStore = configureStore([]);
+
+describe('PreviewPage - Filename Logic', () => {
+  let store;
+  let mockProps;
+
+  beforeEach(() => {
+    store = mockStore({
+      previewPage: {
+        previewRoutedFrom: 'ATP-Page',
+        atpsCollective: [{ name: 'ATP1', atpId: '123' }],
+      },
+      cummulative: {
+        atps: [{ details: { companyName: 'Company A' } }],
+      },
+    });
+
+    mockProps = {
+      trades: [{ id: 1, opicsId: '12345' }],
+      previewPageActions: {
+        onAccordionSelect: jest.fn(),
+      },
+      apiConfiguration: { api: 'mockConfig' },
+      preview: {
+        previewRoutedFrom: 'ATP-Page',
+        atpsCollective: [{ name: 'ATP1', atpId: '123' }],
+        atpTradeList: [{ opicsId: '12345' }],
+      },
+      cummulative: {
+        atps: [{ details: { companyName: 'Company A' } }],
+      },
+    };
+  });
+
+  it('should generate the correct filename when Download ATP is clicked', () => {
+    const wrapper = render(
+      <Provider store={store}>
+        <HashRouter>
+          <PreviewPage {...mockProps} />
+        </HashRouter>
+      </Provider>
+    );
+
+    const downloadAtpButton = screen.getByText(/Download ATP/i);
+    expect(downloadAtpButton).toBeInTheDocument();
+
+    fireEvent.click(downloadAtpButton);
+
+    const timestampRegex = /\d{8}\d{4}/; // Matches YYYYMMDDHHMM
+
+    expect(onDownloadeAtp).toHaveBeenCalledWith(
+      expect.any(Object), // apiConfiguration
+      expect.stringMatching(`ATP-12345-${timestampRegex.source}`), // Generated filename
+      expect.any(Object), // Payload
+      expect.any(String) // URL
+    );
+
+    // Snapshot test
+    expect(wrapper).toMatchSnapshot();
+  });
+
+  it('should handle Multi FX to Single ATP filename', () => {
+    const multiFxProps = {
+      ...mockProps,
+      trades: [
+        { id: 1, opicsId: '12345' },
+        { id: 2, opicsId: '67890' },
+      ],
+      cummulative: {
+        atps: [{ details: { companyName: 'Company A' } }],
+      },
+    };
+
+    const wrapper = render(
+      <Provider store={store}>
+        <HashRouter>
+          <PreviewPage {...multiFxProps} />
+        </HashRouter>
+      </Provider>
+    );
+
+    const downloadAtpButton = screen.getByText(/Download ATP/i);
+    fireEvent.click(downloadAtpButton);
+
+    const timestampRegex = /\d{8}\d{4}/; // Matches YYYYMMDDHHMM
+
+    expect(onDownloadeAtp).toHaveBeenCalledWith(
+      expect.any(Object), // apiConfiguration
+      expect.stringMatching(`ATP-MultiFX-${timestampRegex.source}`), // Filename for Multi FX
+      expect.any(Object), // Payload
+      expect.any(String) // URL
+    );
+
+    // Snapshot test
+    expect(wrapper).toMatchSnapshot();
+  });
+});
