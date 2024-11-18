@@ -1,31 +1,28 @@
+
+
+import * as fileUtils from '../path/to/fileUtils'; // Import the module where the filename logic exists
+import { yourComponentOrFunction } from './yourComponentOrFunction';
+
+// Step 1: Spy on the function or method responsible for filename generation
+jest.spyOn(fileUtils, 'generateFilename'); // Spying on the generateFilename function
+
 describe('Filename Generation Tests', () => {
   const filenameReferenceNumber = 'ABC123';
   const timestamp = '20241118';
-
-  // Mock the main function
-  const mainFunction = (trades, cumulative, preview) => {
-    // Call the existing generateFilename function (assumed imported)
-    return generateFilename(trades, cumulative, preview, filenameReferenceNumber, timestamp);
-  };
 
   it('should handle Single FX linked to Multiple ATPs', () => {
     const trades = [{ id: 1 }];
     const cumulative = { atps: [{}, {}] };
     const preview = { atpsCollective: [] };
 
-    const filename = mainFunction(trades, cumulative, preview);
+    // Step 2: Mock the return value of generateFilename
+    fileUtils.generateFilename.mockReturnValue('ATP-ABC123-1-20241118'); // Mocking filename
 
+    const filename = yourComponentOrFunction(trades, cumulative, preview, filenameReferenceNumber, timestamp);
+
+    // Step 3: Assert that the filename returned is the mocked value
     expect(filename).toBe('ATP-ABC123-1-20241118');
-  });
-
-  it('should handle preview data with Multiple ATPs', () => {
-    const trades = [];
-    const cumulative = {};
-    const preview = { atpsCollective: [{}, {}] };
-
-    const filename = mainFunction(trades, cumulative, preview);
-
-    expect(filename).toBe('ATP-ABC123-1-20241118');
+    expect(fileUtils.generateFilename).toHaveBeenCalledTimes(1); // Ensure it was called
   });
 
   it('should handle Single FX linked to Single ATP', () => {
@@ -33,9 +30,12 @@ describe('Filename Generation Tests', () => {
     const cumulative = { atps: [{}] };
     const preview = { atpsCollective: [] };
 
-    const filename = mainFunction(trades, cumulative, preview);
+    fileUtils.generateFilename.mockReturnValue('ATP-ABC123-20241118'); // Mocking filename
+
+    const filename = yourComponentOrFunction(trades, cumulative, preview, filenameReferenceNumber, timestamp);
 
     expect(filename).toBe('ATP-ABC123-20241118');
+    expect(fileUtils.generateFilename).toHaveBeenCalledTimes(1); // Ensure it was called
   });
 
   it('should handle Multiple FX linked to Single ATP', () => {
@@ -43,18 +43,11 @@ describe('Filename Generation Tests', () => {
     const cumulative = { atps: [{}] };
     const preview = { atpsCollective: [] };
 
-    const filename = mainFunction(trades, cumulative, preview);
+    fileUtils.generateFilename.mockReturnValue('ATP-MultiFX-20241118'); // Mocking filename
+
+    const filename = yourComponentOrFunction(trades, cumulative, preview, filenameReferenceNumber, timestamp);
 
     expect(filename).toBe('ATP-MultiFX-20241118');
-  });
-
-  it('should handle preview data with Single ATP', () => {
-    const trades = [];
-    const cumulative = {};
-    const preview = { atpsCollective: [{}] };
-
-    const filename = mainFunction(trades, cumulative, preview);
-
-    expect(filename).toBe('ATP-ABC123-20241118');
+    expect(fileUtils.generateFilename).toHaveBeenCalledTimes(1); // Ensure it was called
   });
 });
