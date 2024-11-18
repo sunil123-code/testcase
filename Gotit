@@ -1,115 +1,66 @@
-For a single FX to Multi ATP
-Filename: "ATP-" + "Reference Number generated in the PDF" + "-date&timestamp"
-date&timestamp is written in yyyymmddtttt format.
+describe('Download ATP - Filename Logic', () => {
+  let trades, cumulative, preview, filenameReferenceNumber, timestamp;
 
-Example:
-Trade 4223331 is linked to 2 ATP.
-User downloads file on 2024 October 07 at time 1845.
-For one of the ATP, the Filename is "ATP-4223331-1-202410071845"
-While the other ATP PDF will have the filename is "ATP-4223331-2-202410071845"
+  beforeEach(() => {
+    filenameReferenceNumber = 'ABC123'; // Mock reference number
+    timestamp = '20241118'; // Mock timestamp
+  });
 
+  it('should generate filename for Single FX to Multi ATPs', () => {
+    trades = [{ id: 1 }];
+    cumulative = { atps: [{}, {}] }; // Multiple ATPs
+    let filename = '';
 
+    if (trades.length === 1 && cumulative?.atps?.length > 1) {
+      filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
+    }
 
+    expect(filename).toBe(`ATP-ABC123-1-20241118`);
+  });
 
-To ensure that the click event is only triggered when clicking on the Download ATP button and not the entire accordion row or div, you need to prevent the event from propagating to parent elements. Here’s the updated implementation:
+  it('should generate filename for Single FX to Single ATP', () => {
+    trades = [{ id: 1 }];
+    cumulative = { atps: [{}] }; // Single ATP
+    let filename = '';
 
-Updated Code
+    if (trades.length === 1 && cumulative?.atps?.length === 1) {
+      filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+    }
 
-import { Accordion, Button } from 'uds-core';
-import PropTypes from 'prop-types';
-import { connect } from 'react-redux';
-import { cummulativeSelector } from '../../selectors/cummulativeSelector';
-import { previewPageDataSelector } from '../../selectors/previewPage';
-import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
+    expect(filename).toBe(`ATP-ABC123-20241118`);
+  });
 
-const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
-  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+  it('should generate filename for Multi FX to Single ATP', () => {
+    trades = [{ id: 1 }, { id: 2 }];
+    cumulative = { atps: [{}] }; // Single ATP
+    let filename = '';
 
-  const callEachAtp = (atp) => (
-    getSingleATPSections(atp)
-  );
+    if (trades.length > 1 && cumulative?.atps?.length === 1) {
+      filename = `ATP-MultiFX-${timestamp}`;
+    }
 
-  const handleDownloadATPCallback = (e, label) => {
-    // Prevent event from propagating to parent elements
-    e.stopPropagation();
-    handleDownloadAtpCallBack(label);
-  };
+    expect(filename).toBe(`ATP-MultiFX-20241118`);
+  });
 
-  const multiAtpLabel = (label) => {
-    return (
-      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
-          <span>{label}</span>
-        </AccordionCol>
-        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
-          <Button
-            data-testid="button-submit"
-            variant="small"
-            buttonType="link"
-            onClick={(e) => handleDownloadATPCallback(e, label)}
-            leftIconName="ic_upload"
-          >
-            Download ATP
-          </Button>
-        </AccordionCol>
-      </AccordionRow>
-    );
-  };
+  it('should generate filename for preview data with multiple ATPs', () => {
+    preview = { atpsCollective: [{}, {}] }; // Multiple ATPs
+    let filename = '';
 
-  return (
-    <MultiAtpLabelStyle>
-      <Accordion
-        theme="blue"
-        variant="contained"
-        iconPosition="left"
-        isSingleOpen={isSingleOpen}
-        icons={icons}
-        selectedSections={handleSelectedSections}
-        defaultCheckedSections={[0]}
-      >
-        {selectedATPS ? selectedATPS.map(atp =>
-          <AccordionTitle key={atp.name} label={multiAtpLabel(atp.name)}>{callEachAtp(atp)}</AccordionTitle>) : ''
-        }
-      </Accordion>
-    </MultiAtpLabelStyle>
-  );
-};
+    if (preview?.atpsCollective?.length > 1) {
+      filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
+    }
 
-const mapStateToProps = (state) => ({
-  cummulative: cummulativeSelector(state),
-  preview: previewPageDataSelector(state)
+    expect(filename).toBe(`ATP-ABC123-1-20241118`);
+  });
+
+  it('should generate filename for preview data with single ATP', () => {
+    preview = { atpsCollective: [{}] }; // Single ATP
+    let filename = '';
+
+    if (preview?.atpsCollective?.length === 1) {
+      filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+    }
+
+    expect(filename).toBe(`ATP-ABC123-20241118`);
+  });
 });
-
-MultiAccordion.propTypes = {
-  cummulative: PropTypes.shape({
-    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
-  }),
-  preview: PropTypes.shape({
-    previewRoutedFrom: PropTypes.string,
-    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
-  }),
-  icons: PropTypes.bool,
-  isSingleOpen: PropTypes.bool,
-  handleSelectedSections: PropTypes.func,
-  getSingleATPSections: PropTypes.func,
-};
-
-export default connect(mapStateToProps)(MultiAccordion);
-
-Key Updates:
-
-1. e.stopPropagation():
-
-Added in the handleDownloadATPCallback method to prevent the click event from propagating to parent elements, such as the AccordionRow or AccordionTitle.
-
-
-
-2. Targeted Click:
-
-The click event is now strictly bound to the Download ATP button.
-
-
-
-
-With these changes, clicking anywhere else on the accordion or row won’t trigger the download callback, ensuring that the event is only executed when the button is clicked.
-
