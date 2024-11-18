@@ -54,11 +54,28 @@ export const handleDownloadATP = (configuration, trades, cumulative, preview, la
   // Assume the reference number is the opicsId from the first trade in the preview data
   const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId; // Fallback to first trade if no preview
 
-  const multiFxFileName = trades?.length > 1
-    ? `ATP-MultiFX-${timestamp}`
-    : `ATP-${trades[0].opicsId}-${timestamp}`;
+  let filename = '';
 
-  const filename = preview?.atpsCollective?.length > 1 ? `ATP-${filenameReferenceNumber}-1-${timestamp}` : multiFxFileName;
+  // Logic for Single FX to Multi ATP
+  if (trades.length === 1 && cumulative?.atps?.length > 1) {
+    // For Single FX linked to Multiple ATPs, add numbering for each ATP
+    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
+  }
+  // Logic for Single FX to Single ATP
+  else if (trades.length === 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  }
+  // Logic for Multi FX to Single ATP
+  else if (trades.length > 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-MultiFX-${timestamp}`;
+  }
+
+  // Use the preview data filename logic if there are multiple atps in the preview data
+  if (preview?.atpsCollective?.length > 1) {
+    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
+  } else if (preview?.atpsCollective?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  }
 
   // Handle cumulative data (keep existing functionality)
   let atpTradeList = [];
@@ -116,9 +133,10 @@ export const handleDownloadATP = (configuration, trades, cumulative, preview, la
   // Generate the download URL
   const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
 
-  // Dispatch the processed payload
+  // Dispatch the processed payload with the constructed filename
   dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
 };
+
 export const handleSelectedSections = (sections, previewPageActions, trades) => {
   if (trades.length === 1) {
     previewPageActions.onAccordionSelect(0);
@@ -176,7 +194,7 @@ const CardView = ({ trades, previewPageActions, apiConfiguration, preview,
               variant="small"
               buttonType="link"
               onClick={handleDownloadAtpCallBack}
-              leftIconName="ic_upload"
+              leftIconName="ic_download"
             >
               Download ATP
             </Button>
