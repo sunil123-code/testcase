@@ -1,75 +1,130 @@
-export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
-  if (!trades || trades.length === 0) {
-    // eslint-disable-next-line no-console
-    return;
-  }
-
-  const now = new Date();
-  const timestamp =
-    `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
-
-  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId;
-
-  const multiFxFileName = trades?.length > 1
-    ? `ATP-MultiFX-${timestamp}`
-    : `ATP-${trades[0].opicsId}-${timestamp}`;
-
-  const filename = preview?.atpsCollective?.length > 1 ? `ATP-${filenameReferenceNumber}-1-${timestamp}` : multiFxFileName;
-
-  let atpTradeList = [];
-  let totalAtps = 0;
-  let atp = {};
-
-  if (cumulative?.atps?.[0]?.details?.companyName) {
-    atpTradeList = trades;
-  } else {
-    atpTradeList = preview.tradesCollective;
-  }
-
-  if (cumulative?.atps?.[0]?.details?.companyName) {
-    atp = cumulative.atps[0];
-    totalAtps = cumulative.atps.length;
-  } else {
-    atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective.filter(item => item.name === label)[0];
-    totalAtps = preview?.atpsCollective?.length;
-  }
-
-  const atpData = {
-    trades: atpTradeList.map(trade => ({ opicsId: trade.opicsId })),
-    totalNoOfAtps: totalAtps,
-    atps: [{
-      atpId: cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId,
-      referenceDocId: atp?.referenceDocId || null,
-      name: atp?.name || 'ATP 1',
-      details: {
-        ...atp?.details,
-        contactInfo: atp?.details?.contactInfo
+{
+  "trades": [
+    {
+      "opicsId": "25890"
+    }
+  ],
+  "totalNoOfAtps": 3,
+  "atps": [
+    {
+      "atpId": null,
+      "referenceDocId": null,
+      "name": "ATP 1",
+      "details": {
+        "companyName": "Ankuding Inc",
+        "fxToBePurchased": "5,000.00",
+        "fxToBePurchasedCurrency": "USD",
+        "address": "aaaaaaaaaaaaaaaa",
+        "contactInfo": "aaaaaaaa",
+        "taxIdentificationNo": "aaaaaaaaaaaaaaaaa",
+        "governmentId": "aaaaaaaaaaaaaaaaaaa",
+        "residency": "Resident",
+        "buyAmount": "45,000.23",
+        "buyCurrency": "USD"
       },
-      purpose: {
-        ...atp?.purpose,
-        principle: atp?.purpose?.principle
+      "purpose": {
+        "purposeCategory": "Inward Investments by Non-Residents",
+        "totalFXPurchased": null,
+        "debtAccount": null,
+        "purpose": "Remittance in equivalent FX of excess pesos (funded by inward remittance of FX) from unrealized investments in the Philippines",
+        "paymentType": null,
+        "principle": null,
+        "interest": null,
+        "fees": null,
+        "securityType": null,
+        "specifiedReason": null
       },
-      fxDisposition: {
-        ...atp?.fxDisposition,
-        eventualRemittance: atp?.fxDisposition?.eventualRemittance
+      "fxDisposition": {
+        "type": "For Credit to FCDU Account",
+        "accountOwner": "11111111111",
+        "accountNo": "1111111111111",
+        "depository": "111111111111",
+        "eventualRemittance": "1111111111111111111"
       },
-      intendedBeneficiary: atp?.intendedBeneficiary,
-    }],
-  };
-
-  delete atpData.atps[0]?.details?.sumOfBuyAmounts;
-  delete atpData.atps[0]?.supportingDocs;
-
-  // Add null values for empty fields when data comes from cumulative
-  if (cumulative?.atps?.[0]?.details?.companyName) {
-    Object.keys(atpData.atps[0]).forEach(key => {
-      if (atpData.atps[0][key] === '') {
-        atpData.atps[0][key] = null;
+      "intendedBeneficiary": {
+        "name": "111111111111111111111111111111111",
+        "address": "1111111"
       }
-    });
-  }
-
-  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
-
-  dispatch(onDownloadeAtp(configuration, filename, atpData, url));
-};
+    },
+    {
+      "atpId": null,
+      "referenceDocId": null,
+      "name": "ATP 2",
+      "details": {
+        "companyName": "Ankuding Inc",
+        "fxToBePurchased": "5,000.00",
+        "fxToBePurchasedCurrency": "USD",
+        "address": "aaaaaaaaaaaaaaaa",
+        "contactInfo": "aaaaaaaa",
+        "taxIdentificationNo": "aaaaaaaaaaaaaaaaa",
+        "governmentId": "aaaaaaaaaaaaaaaaaaa",
+        "residency": "Resident",
+        "buyAmount": "43.00",
+        "buyCurrency": "USD"
+      },
+      "purpose": {
+        "purposeCategory": "Inward Investments by Non-Residents",
+        "totalFXPurchased": null,
+        "debtAccount": null,
+        "purpose": "Remittance of earnings",
+        "paymentType": null,
+        "principle": null,
+        "interest": null,
+        "fees": null,
+        "securityType": null,
+        "specifiedReason": null
+      },
+      "fxDisposition": {
+        "type": "For Credit to FCDU Account",
+        "accountOwner": "22222222222",
+        "accountNo": "22222222222222",
+        "depository": "22222222222222",
+        "eventualRemittance": "222222222222222222222"
+      },
+      "intendedBeneficiary": {
+        "name": "2222222222222",
+        "address": "22222222"
+      }
+    },
+    {
+      "atpId": null,
+      "referenceDocId": null,
+      "name": "ATP 3",
+      "details": {
+        "companyName": "Ankuding Inc",
+        "fxToBePurchased": "5,000.00",
+        "fxToBePurchasedCurrency": "USD",
+        "address": "aaaaaaaaaaaaaaaa",
+        "contactInfo": "aaaaaaaa",
+        "taxIdentificationNo": "aaaaaaaaaaaaaaaaa",
+        "governmentId": "aaaaaaaaaaaaaaaaaaa",
+        "residency": "Resident",
+        "buyAmount": "5,000.00",
+        "buyCurrency": "USD"
+      },
+      "purpose": {
+        "purposeCategory": "Inward Investments by Non-Residents",
+        "totalFXPurchased": null,
+        "debtAccount": null,
+        "purpose": "Remittance of earnings",
+        "paymentType": null,
+        "principle": null,
+        "interest": null,
+        "fees": null,
+        "securityType": null,
+        "specifiedReason": null
+      },
+      "fxDisposition": {
+        "type": "For Credit to FCDU Account",
+        "accountOwner": "33333333",
+        "accountNo": "33333333333333333",
+        "depository": "3333333333333",
+        "eventualRemittance": "33333333333333333333333333333333"
+      },
+      "intendedBeneficiary": {
+        "name": "33333333333333",
+        "address": "3333333333333333333333333333333333"
+      }
+    }
+  ]
+}
