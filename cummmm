@@ -1,3 +1,274 @@
+import { useEffect, useCallback } from 'react';
+import { Card, Button } from 'uds-core';
+import { connect, useDispatch } from 'react-redux';
+import PropTypes from 'prop-types';
+
+import Accordion from '../../components/Accordion';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import {
+
+  AccordionTitle,
+} from '../../style/common.styles';
+
+import { getURL } from '../../common/utils/actionHelper';
+import { API_NAME } from '../../common/constants/constants'; // Ensure you import other necessary constants 
+import endpoints from '../../apis/endpoints';
+import { onDownloadeAtp } from '../../actions/previewPage/creators';
+import MultiAccordion from '../../components/MultiAccordion';
+import PurposeForm from './purposeForm/view';
+import SupportForm from './supportForm/view';
+import FxDetails from './fxDetails/view';
+import FxDisposition from './fxDisposition/view';
+import IntendedBeneficiary from './intendedBeneficiary/view';
+import { PreviewHeading } from './style';
+import { previewPageDataSelector } from '../../selectors/previewPage';
+
+// New method for generating filename
+export const generateFilename = (trades, cumulative, preview) => {
+  const now = new Date();
+  const timestamp =
+    `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
+
+  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId;
+
+  let filename = '';
+
+  if (trades.length === 1 && cumulative?.atps?.length > 1) {
+    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
+  } else if (trades.length === 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  } else if (trades.length > 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-MultiFX-${timestamp}`;
+  }
+
+  if (preview?.atpsCollective?.length > 1) {
+    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
+  } else if (preview?.atpsCollective?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  }
+
+  return filename;
+};
+
+const preparePayload = (data) => {
+  const convertEmptyToNull = (obj) => {
+    const newObj = Array.isArray(obj) ? [] : {}; // Maintain array structure if obj is an array
+    Object.keys(obj).forEach(key => {
+      if (obj[key] === '') {
+        newObj[key] = null;
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        newObj[key] = convertEmptyToNull(obj[key]); // Recursively process nested objects
+      } else {
+        newObj[key] = obj[key];
+      }
+    });
+    return newObj;
+  };
+
+  return convertEmptyToNull(data);
+};
+
+export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
+  if (!trades || trades.length === 0) {
+    // eslint-disable-next-line no-console
+    console.error("No trades available to process ATP download.");
+    return;
+  }
+  
+
+// Use the new generateFilename method
+  const filename = generateFilename(trades, cumulative, preview);
+
+   let atpData = {};
+
+// If preview data exists, use that instead
+if (cumulative?.atps?.length > 0) {
+  atpData = {
+    trades: trades.map(trade => ({ opicsId: trade.opicsId })),
+    totalNoOfAtps: cumulative.atps.length,
+    atps: cumulative.atps.map(atp => ({
+      atpId: atp?.details?.atpId || null,
+      referenceDocId: atp?.referenceDocId || null,
+      name: atp?.name || 'ATP',
+      details: { ...atp.details },
+      purpose: { ...atp.purpose },
+      fxDisposition: { ...atp.fxDisposition },
+      intendedBeneficiary: { ...atp.intendedBeneficiary },
+    })),
+  };
+} else if (preview?.atpsCollective?.length > 0) {
+  // Use preview data as fallback
+  const atp = typeof label === 'object' 
+    ? preview?.atpsCollective?.[0] 
+    : preview?.atpsCollective.find(item => item.name === label);
+
+  atpData = {
+    trades: trades.map(trade => ({ opicsId: trade.opicsId })),
+    totalNoOfAtps: preview?.atpsCollective?.length || 0,
+    atps: [{
+      atpId: atp?.atpId,
+      referenceDocId: atp?.referenceDocId || null,
+      name: atp?.name || 'ATP 1',
+      details: { ...atp?.details },
+      purpose: { ...atp?.purpose },
+      fxDisposition: { ...atp?.fxDisposition },
+      intendedBeneficiary: atp?.intendedBeneficiary,
+    }],
+  };
+} else {
+  console.error("No ATP data available for download.");
+  return;
+}
+atpData.atps.forEach(atp => {
+  delete atp.details?.sumOfBuyAmounts;
+  delete atp.supportingDocs;
+});
+
+// Convert empty strings to null in the payload
+  const processedPayload = preparePayload(atpData);
+
+// Generate the download URL
+  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
+
+// Dispatch the processed payload with the constructed filename
+  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
+};
+
+export const handleSelectedSections = (sections, previewPageActions, trades) => {
+  if (trades.length === 1) {
+    previewPageActions.onAccordionSelect(0);
+  } else {
+    previewPageActions.onAccordionSelect(sections[0]);
+  }
+};
+
+const getSingleAtpSections = (ATP) => {
+  return (
+    <div style={{ padding: '0px 20px' }}>
+      <FxDetails details={ATP?.details} />
+      <PurposeForm atps={ATP?.purpose} details={ATP?.details} />
+      <FxDisposition fxDisposition={ATP?.fxDisposition} />
+      <IntendedBeneficiary intendedBeneficiary={ATP?.intendedBeneficiary} />
+      <SupportForm supportingDocs={ATP?.supportingDocs} />
+    </div>
+  );
+};
+
+const CardView = ({ trades, previewPageActions, apiConfiguration, preview,
+  cummulative }) => {
+  const dispatch = useDispatch();
+  
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+  useEffect(() => {
+    if (trades.length === 1) {
+      previewPageActions.onAccordionSelect(0);
+    } else {
+      previewPageActions.onAccordionSelect('');
+    }
+    return () => {
+      previewPageActions.onAccordionSelect(0);
+    };
+  }, [trades.length, previewPageActions]);
+
+  const handleDownloadAtpCallBack = useCallback((label) => {
+    handleDownloadATP(apiConfiguration, trades, cummulative, preview, label, dispatch);
+  }, [apiConfiguration, trades, cummulative, preview, dispatch]);
+  
+
+  const header1 = {
+    cardNumber: 1,
+    title: <PreviewHeading>Transaction Details</PreviewHeading>,
+  };
+
+  const header2 = {
+    cardNumber: 2,
+    title: (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div><PreviewHeading>Purchase Application</PreviewHeading></div>
+        {
+          selectedATPS?.length <= 1 && <div>
+            <Button
+              data-testid="button-submit"
+              variant="small"
+              buttonType="link"
+              onClick={handleDownloadAtpCallBack}
+              leftIconName="ic_download"
+            >
+              Download ATP
+            </Button>
+          </div>
+        }
+      </div>
+    ),
+  };
+
+  const isSingleOpen = true;
+
+  const icons = { close: 'ic_chevron_down', open: 'ic_chevron_right' };
+
+  return (
+    <>
+      <Card header={header1}>
+        <AccordionTitle>
+          <Accordion
+            isSingleOpen={isSingleOpen}
+            icons={icons}
+            handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
+            defaultCheckedSections={[0]}
+            trades={trades}
+            label="ATP1"
+          />
+        </AccordionTitle>
+      </Card>
+
+      <div style={{ marginTop: '-50px' }}>
+        <Card header={header2}>
+          {selectedATPS?.length > 1 ?
+            <div style={{ padding: '0px 20px' }}>
+              <MultiAccordion
+                isSingleOpen={isSingleOpen}
+                icons={icons}
+                handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
+                defaultCheckedSections={[0]}
+                getSingleATPSections={getSingleAtpSections}
+                handleDownloadAtpCallBack={handleDownloadAtpCallBack}
+              />
+            </div>
+            : getSingleAtpSections(selectedATPS[0])
+          }
+        </Card>
+      </div>
+    </>
+  );
+};
+
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state)
+});
+
+CardView.propTypes = {
+  trades: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    opicsId: PropTypes.string.isRequired,
+  })).isRequired,
+  previewPageActions: PropTypes.shape({
+    onAccordionSelect: PropTypes.func.isRequired,
+  }).isRequired,
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
+  }),
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
+  }),
+  apiConfiguration: PropTypes.shape({})
+};
+
+export default connect(mapStateToProps)(CardView);
+
+==================
+
 import { Accordion, Button } from 'uds-core';
 import PropTypes from 'prop-types';
 import { connect } from 'react-redux';
@@ -5,17 +276,8 @@ import { cummulativeSelector } from '../../selectors/cummulativeSelector';
 import { previewPageDataSelector } from '../../selectors/previewPage';
 import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
 
-const MultiAccordion = ({
-  isSingleOpen,
-  icons,
-  handleSelectedSections,
-  cummulative,
-  preview,
-  getSingleATPSections,
-  handleDownloadAtpCallBack,
-}) => {
-  // Determine which ATPs to display based on the route or page context
-  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
+    const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
 
   // Render ATP details section for each ATP
   const callEachAtp = (atp) => getSingleATPSections(atp);
@@ -76,16 +338,16 @@ const MultiAccordion = ({
 
 const mapStateToProps = (state) => ({
   cummulative: cummulativeSelector(state),
-  preview: previewPageDataSelector(state),
+  preview: previewPageDataSelector(state)
 });
 
 MultiAccordion.propTypes = {
   cummulative: PropTypes.shape({
-    atps: PropTypes.arrayOf(PropTypes.shape([{}])),
+    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
   }),
   preview: PropTypes.shape({
     previewRoutedFrom: PropTypes.string,
-    atpsCollective: PropTypes.arrayOf(PropTypes.shape({})),
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
   }),
   icons: PropTypes.bool,
   isSingleOpen: PropTypes.bool,
@@ -94,4 +356,8 @@ MultiAccordion.propTypes = {
   handleDownloadAtpCallBack: PropTypes.func.isRequired, // Ensure callback is required
 };
 
-export default connect(mapStateToProps)(MultiAccordion);
+export default connect(mapStateToProps)(MultiAccordion);==
+
+======================
+
+{"trades":[{"opicsId":"25890"}],"totalNoOfAtps":2,"atps":[{"atpId":null,"referenceDocId":null,"name":"ATP 1","details":{"companyName":"Ankuding Inc","fxToBePurchased":"43.00","fxToBePurchasedCurrency":"USD","address":"aaaaaaaa","contactInfo":"aaaaaaaaaaa","taxIdentificationNo":"aaaaaaaaaaaaaaaa","governmentId":"aaaaaaaaaaaaaaaaa","residency":"Resident","buyAmount":"50,000.23","buyCurrency":"USD"},"purpose":{"purposeCategory":"Inward Investments by Non-Residents","totalFXPurchased":null,"debtAccount":null,"purpose":"Remittance of earnings","paymentType":null,"principle":null,"interest":null,"fees":null,"securityType":null,"specifiedReason":null},"fxDisposition":{"type":"For Credit to FCDU Account","accountOwner":"11111111111","accountNo":"111111111111111","depository":"1111111111111111","eventualRemittance":"1111111111111111111111"},"intendedBeneficiary":{"name":"11111111111111111111111","address":"11111111111111111111111111111"}},{"atpId":null,"referenceDocId":null,"name":"ATP 2","details":{"companyName":"Ankuding Inc","fxToBePurchased":"43.00","fxToBePurchasedCurrency":"USD","address":"aaaaaaaa","contactInfo":"aaaaaaaaaaa","taxIdentificationNo":"aaaaaaaaaaaaaaaa","governmentId":"aaaaaaaaaaaaaaaaa","residency":"Resident","buyAmount":"43.00","buyCurrency":"USD"},"purpose":{"purposeCategory":"Inward Investments by Non-Residents","totalFXPurchased":null,"debtAccount":null,"purpose":"Remittance in equivalent FX of excess pesos (funded by inward remittance of FX) from unrealized investments in the Philippines","paymentType":null,"principle":null,"interest":null,"fees":null,"securityType":null,"specifiedReason":null},"fxDisposition":{"type":"For Credit to FCDU Account","accountOwner":"2222222","accountNo":"22222222222222222","depository":"22222222222222","eventualRemittance":"222222222222222222222"},"intendedBeneficiary":{"name":"22222222222","address":"222222222222222"}}]}
