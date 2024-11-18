@@ -1,94 +1,10 @@
-
-
-import { Accordion, Button } from 'uds-core';
-import PropTypes from 'prop-types';
-import { connect } from 'react-redux';
-import { cummulativeSelector } from '../../selectors/cummulativeSelector';
-import { previewPageDataSelector } from '../../selectors/previewPage';
-import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
-
-const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
-  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
-
-  const callEachAtp = (atp) => (
-    getSingleATPSections(atp)
-  );
-
-  const handleDownloadATPCallback = (e, label, atp) => {
-    // Prevent event from propagating to parent elements
-    e.stopPropagation();
-
-    // Extract Reference Number from ATP (or Preview)
-    const referenceNumber = atp ? atp.referenceNumber : preview.previewRoutedFrom;  // Assuming `referenceNumber` is a property of the `atp` object
-
-    // Get the current timestamp in yyyyMMddHHmm format
-    const timestamp = new Date().toISOString().replace(/[-T:.]/g, '').slice(0, 12); // '202410071845'
-
-    // Create the filename in the required format
-    const fileName = `ATP-${referenceNumber}-${atp ? atp.id : 1}-${timestamp}`;
-
-    // Trigger the download action with the generated filename
-    handleDownloadAtpCallBack(fileName);  // Pass the filename to the callback
-  };
-
-  const multiAtpLabel = (label, atp) => {
-    return (
-      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
-          <span>{label}</span>
-        </AccordionCol>
-        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
-          <Button
-            data-testid="button-submit"
-            variant="small"
-            buttonType="link"
-            onClick={(e) => handleDownloadATPCallback(e, label, atp)}  // Pass `atp` to the handler
-            leftIconName="ic_upload"
-          >
-            Download ATP
-          </Button>
-        </AccordionCol>
-      </AccordionRow>
+ const wrapper = render(
+      <Provider store={store}>
+        <HashRouter>
+          <PreviewPage {...mockProps} />
+        </HashRouter>
+      </Provider>
     );
-  };
-
-  return (
-    <MultiAtpLabelStyle>
-      <Accordion
-        theme="blue"
-        variant="contained"
-        iconPosition="left"
-        isSingleOpen={isSingleOpen}
-        icons={icons}
-        selectedSections={handleSelectedSections}
-        defaultCheckedSections={[0]}
-      >
-        {selectedATPS ? selectedATPS.map(atp =>
-          <AccordionTitle key={atp.name} label={multiAtpLabel(atp.name, atp)}>{callEachAtp(atp)}</AccordionTitle>) : ''
-        }
-      </Accordion>
-    </MultiAtpLabelStyle>
-  );
-};
-
-const mapStateToProps = (state) => ({
-  cummulative: cummulativeSelector(state),
-  preview: previewPageDataSelector(state)
-});
-
-MultiAccordion.propTypes = {
-  cummulative: PropTypes.shape({
-    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
-  }),
-  preview: PropTypes.shape({
-    previewRoutedFrom: PropTypes.string,
-    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
-  }),
-  icons: PropTypes.bool,
-  isSingleOpen: PropTypes.bool,
-  handleSelectedSections: PropTypes.func,
-  getSingleATPSections: PropTypes.func,
-  handleDownloadAtpCallBack: PropTypes.func.isRequired,  // Assuming it's passed down as a prop
-};
-
-export default connect(mapStateToProps)(MultiAccordion);
+    const downloadAtp = screen.getByText(/Download ATP/i);
+    fireEvent.click(downloadAtp);
+    expect(wrapper).toMatchSnapshot();
