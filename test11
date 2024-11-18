@@ -1,63 +1,33 @@
-export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
-  if (!trades || trades.length === 0) {
-    console.error("No trades available to process ATP download.");
-    return;
-  }
+import { Accordion, Button } from 'uds-core';
+import PropTypes from 'prop-types';
+import { connect } from 'react-redux';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import { previewPageDataSelector } from '../../selectors/previewPage';
+import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
 
-  const filename = generateFilename(trades, cumulative, preview);
-  let atpData = {};
+const MultiAccordion = ({
+  isSingleOpen,
+  icons,
+  handleSelectedSections,
+  cummulative,
+  preview,
+  getSingleATPSections,
+  handleDownloadAtpCallBack
+}) => {
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
 
-  // Filter the ATP data based on the label (ATP name)
-  const selectedAtp = cumulative?.atps?.find(atp => atp.name === label) ||
-                      preview?.atpsCollective?.find(atp => atp.name === label);
+  const callEachAtp = (atp) => getSingleATPSections(atp);
 
-  if (selectedAtp) {
-    atpData = {
-      trades: trades.map(trade => ({ opicsId: trade.opicsId })),
-      totalNoOfAtps: 1,
-      atps: [{
-        atpId: selectedAtp?.atpId || null,
-        referenceDocId: selectedAtp?.referenceDocId || null,
-        name: selectedAtp?.name || 'ATP',
-        details: { ...selectedAtp.details },
-        purpose: { ...selectedAtp.purpose },
-        fxDisposition: { ...selectedAtp.fxDisposition },
-        intendedBeneficiary: selectedAtp?.intendedBeneficiary,
-      }]
-    };
-  } else {
-    console.error("No ATP data found for the specified label.");
-    return;
-  }
+  const handleDownloadATPCallback = (e, atpName) => {
+    e.stopPropagation();
+    // Filter out the correct ATP payload from cummulative based on ATP name
+    const atpPayload = cummulative?.atps?.find((atp) => atp.name === atpName);
+    if (atpPayload) {
+      handleDownloadAtpCallBack(atpPayload); // Pass the entire ATP object for download
+    }
+  };
 
-  // Clean the payload by removing unnecessary fields
-  atpData.atps.forEach(atp => {
-    delete atp.details?.sumOfBuyAmounts;
-    delete atp.supportingDocs;
-  });
-
-  // Convert empty strings to null in the payload
-  const processedPayload = preparePayload(atpData);
-
-  // Generate the download URL
-  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
-
-  // Dispatch the processed payload with the constructed filename
-  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
-};
-
-
-=======================
-
-
-const handleDownloadAtpCallBack = useCallback((label) => {
-    handleDownloadATP(apiConfiguration, trades, cummulative, preview, label, dispatch);
-}, [apiConfiguration, trades, cummulative, preview, dispatch]);
-
-
-=============================
-
-const multiAtpLabel = (atp) => {
+  const multiAtpLabel = (atp) => {
     return (
       <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
@@ -68,12 +38,59 @@ const multiAtpLabel = (atp) => {
             data-testid="button-submit"
             variant="small"
             buttonType="link"
-            onClick={(e) => handleDownloadATPCallback(e, atp)} // Pass the ATP object when clicking
+            onClick={(e) => handleDownloadATPCallback(e, atp.name)} // Pass the ATP name to filter and download
             leftIconName="ic_download"
           >
-            Download ATP
+            Download {atp.name || 'ATP'} {/* Dynamically set the button text */}
           </Button>
         </AccordionCol>
       </AccordionRow>
     );
+  };
+
+  return (
+    <MultiAtpLabelStyle>
+      <Accordion
+        theme="blue"
+        variant="contained"
+        iconPosition="left"
+        isSingleOpen={isSingleOpen}
+        icons={icons}
+        selectedSections={handleSelectedSections}
+        defaultCheckedSections={[0]}
+      >
+        {selectedATPS && selectedATPS.length > 0 ? (
+          selectedATPS.map((atp) => (
+            <AccordionTitle key={atp.name || atp.atpId} label={multiAtpLabel(atp)}>
+              {callEachAtp(atp)}
+            </AccordionTitle>
+          ))
+        ) : (
+          <div>No ATPs available to display</div>  {/* Show a message if no ATPs */}
+        )}
+      </Accordion>
+    </MultiAtpLabelStyle>
+  );
 };
+
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state)
+});
+
+MultiAccordion.propTypes = {
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape({}))
+  }),
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
+  }),
+  icons: PropTypes.bool,
+  isSingleOpen: PropTypes.bool,
+  handleSelectedSections: PropTypes.func,
+  getSingleATPSections: PropTypes.func,
+  handleDownloadAtpCallBack: PropTypes.func.isRequired, // callback is required
+};
+
+export default connect(mapStateToProps)(MultiAccordion);
