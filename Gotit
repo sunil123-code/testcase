@@ -1,5 +1,85 @@
+import { Accordion, Button } from 'uds-core';
+import PropTypes from 'prop-types';
+import { connect } from 'react-redux';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import { previewPageDataSelector } from '../../selectors/previewPage';
+import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
 
+const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+  // const selectedATPS = preview.previewRoutedFrom === "ATP-Page" ? cummulative : cummulative
+  const callEachAtp = (atp) => (
+    getSingleATPSections(atp)
+  );
 
+  const handleDownloadATPCallback = (e, label) => {
+    e.stopPropagation();
+    handleDownloadAtpCallBack(label);
+  };
+
+  const multiAtpLabel = (label) => {
+    return (
+      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
+          <span>{label}</span>
+        </AccordionCol>
+        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
+          <Button
+            data-testid="button-submit"
+            variant="small"
+            buttonType="link"
+            // className='xxxx'
+            onClick={(e) => handleDownloadATPCallback(e, label)}
+            leftIconName="ic_download"
+          >
+            Download ATP
+          </Button>
+        </AccordionCol>
+      </AccordionRow>
+    );
+  };
+  return (
+    <MultiAtpLabelStyle>
+      <Accordion
+        theme="blue"
+        variant="contained"
+        iconPosition="left"
+        isSingleOpen={isSingleOpen}
+        icons={icons}
+        selectedSections={handleSelectedSections}
+        defaultCheckedSections={[0]}
+      >
+        {selectedATPS ? selectedATPS.map(atp =>
+          <AccordionTitle key={atp.name} label={multiAtpLabel(atp.name)}>{callEachAtp(atp)}</AccordionTitle>) : ''
+        }
+
+      </Accordion>
+    </MultiAtpLabelStyle>
+  );
+};
+
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state)
+});
+MultiAccordion.propTypes = {
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
+  }),
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
+  }),
+  icons: PropTypes.bool,
+  isSingleOpen: PropTypes.bool,
+  handleSelectedSections: PropTypes.func,
+  getSingleATPSections: PropTypes.func,
+};
+
+export default connect(mapStateToProps)(MultiAccordion);
+
+this file is src\components\MultiAccordion\index.js 
+=====================
 
 import { useEffect, useCallback } from 'react';
 import { Card, Button } from 'uds-core';
@@ -8,9 +88,13 @@ import PropTypes from 'prop-types';
 
 import Accordion from '../../components/Accordion';
 import { cummulativeSelector } from '../../selectors/cummulativeSelector';
-import { AccordionTitle } from '../../style/common.styles';
+import {
+
+  AccordionTitle,
+} from '../../style/common.styles';
+
 import { getURL } from '../../common/utils/actionHelper';
-import { API_NAME } from '../../common/constants/constants';
+import { API_NAME } from '../../common/constants/constants'; // Ensure you import other necessary constants
 import endpoints from '../../apis/endpoints';
 import { onDownloadeAtp } from '../../actions/previewPage/creators';
 import MultiAccordion from '../../components/MultiAccordion';
@@ -22,24 +106,24 @@ import IntendedBeneficiary from './intendedBeneficiary/view';
 import { PreviewHeading } from './style';
 import { previewPageDataSelector } from '../../selectors/previewPage';
 
-// Mocked `generateFilename` logic
-export const generateFilename = (trades, cumulative, preview, filenameReferenceNumber, timestamp) => {
+// New method for generating filename
+export const generateFilename = (trades, cumulative, preview) => {
+  const now = new Date();
+  const timestamp =
+    `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
+
+  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId;
+
   let filename = '';
 
-  // Logic for Single FX to Multi ATP
   if (trades.length === 1 && cumulative?.atps?.length > 1) {
     filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
-  }
-  // Logic for Single FX to Single ATP
-  else if (trades.length === 1 && cumulative?.atps?.length === 1) {
+  } else if (trades.length === 1 && cumulative?.atps?.length === 1) {
     filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
-  }
-  // Logic for Multi FX to Single ATP
-  else if (trades.length > 1 && cumulative?.atps?.length === 1) {
+  } else if (trades.length > 1 && cumulative?.atps?.length === 1) {
     filename = `ATP-MultiFX-${timestamp}`;
   }
 
-  // Use the preview data filename logic if there are multiple atps in the preview data
   if (preview?.atpsCollective?.length > 1) {
     filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
   } else if (preview?.atpsCollective?.length === 1) {
@@ -49,65 +133,75 @@ export const generateFilename = (trades, cumulative, preview, filenameReferenceN
   return filename;
 };
 
-// Prepare payload function
 const preparePayload = (data) => {
   const convertEmptyToNull = (obj) => {
-    const newObj = Array.isArray(obj) ? [] : {};
+    const newObj = Array.isArray(obj) ? [] : {}; // Maintain array structure if obj is an array
     Object.keys(obj).forEach(key => {
       if (obj[key] === '') {
         newObj[key] = null;
       } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-        newObj[key] = convertEmptyToNull(obj[key]);
+        newObj[key] = convertEmptyToNull(obj[key]); // Recursively process nested objects
       } else {
         newObj[key] = obj[key];
       }
     });
     return newObj;
   };
+
   return convertEmptyToNull(data);
 };
 
 export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
   if (!trades || trades.length === 0) {
+    // eslint-disable-next-line no-console
     return;
   }
 
-  const now = new Date();
-  const timestamp = `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
-
-  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId;
-
-  // Generate filename using the new method
-  const filename = generateFilename(trades, cumulative, preview, filenameReferenceNumber, timestamp);
+  // Use the new generateFilename method
+  const filename = generateFilename(trades, cumulative, preview);
 
   let atpTradeList = [];
   let totalAtps = 0;
   let atp = {};
 
+  // If preview data exists, use that instead
   if (cumulative?.atps?.[0]?.details?.companyName) {
-    atpTradeList = trades;
+    atpTradeList = trades; // Cumulative ATP trade list
   } else {
-    atpTradeList = preview.tradesCollective;
+    atpTradeList = preview.tradesCollective; // Take only the first object for preview
   }
 
   if (cumulative?.atps?.[0]?.details?.companyName) {
-    atp = cumulative.atps[0];
+    atp = cumulative.atps[0]; // Cumulative ATP list
     totalAtps = cumulative.atps.length;
   } else {
     atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective.filter(item => item.name === label)[0];
     totalAtps = preview?.atpsCollective?.length;
   }
 
+  // Format the data to be sent in JSON, excluding supportingDocs and taking only the first object
   const atpData = {
     trades: atpTradeList.map(trade => ({ opicsId: trade.opicsId })),
     totalNoOfAtps: totalAtps,
     atps: [{
+      // If cumulative data has a companyName, set atpID to null; otherwise use atpID from Preview Data
       atpId: cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId,
       referenceDocId: atp?.referenceDocId || null,
       name: atp?.name || 'ATP 1',
-      details: { ...atp?.details, contactInfo: atp?.details?.contactInfo },
-      purpose: { ...atp?.purpose, principle: atp?.purpose?.principle },
-      fxDisposition: { ...atp?.fxDisposition, eventualRemittance: atp?.fxDisposition?.eventualRemittance },
+
+      details: {
+        ...atp?.details,
+        contactInfo: atp?.details?.contactInfo // Ensure contactInfo is used
+      },
+      purpose: {
+        ...atp?.purpose,
+        principle: atp?.purpose?.principle, // Ensure principal is used
+      },
+
+      fxDisposition: {
+        ...atp?.fxDisposition,
+        eventualRemittance: atp?.fxDisposition?.eventualRemittance, // Ensure eventualRemittance is used
+      },
       intendedBeneficiary: atp?.intendedBeneficiary,
     }],
   };
@@ -115,9 +209,13 @@ export const handleDownloadATP = (configuration, trades, cumulative, preview, la
   delete atpData.atps[0]?.details?.sumOfBuyAmounts;
   delete atpData.atps[0]?.supportingDocs;
 
+  // Convert empty strings to null in the payload
   const processedPayload = preparePayload(atpData);
 
+  // Generate the download URL
   const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
+
+  // Dispatch the processed payload with the constructed filename
   dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
 };
 
@@ -141,11 +239,11 @@ const getSingleAtpSections = (ATP) => {
   );
 };
 
-const CardView = ({ trades, previewPageActions, apiConfiguration, preview, cummulative }) => {
+const CardView = ({ trades, previewPageActions, apiConfiguration, preview,
+  cummulative }) => {
   const dispatch = useDispatch();
 
   const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
-
   useEffect(() => {
     if (trades.length === 1) {
       previewPageActions.onAccordionSelect(0);
@@ -189,11 +287,13 @@ const CardView = ({ trades, previewPageActions, apiConfiguration, preview, cummu
   };
 
   const isSingleOpen = true;
+
   const icons = { close: 'ic_chevron_down', open: 'ic_chevron_right' };
 
   return (
     <>
       <Card header={header1}>
+
         <AccordionTitle>
           <Accordion
             isSingleOpen={isSingleOpen}
@@ -208,6 +308,7 @@ const CardView = ({ trades, previewPageActions, apiConfiguration, preview, cummu
 
       <div style={{ marginTop: '-50px' }}>
         <Card header={header2}>
+
           {selectedATPS?.length > 1 ?
             <div style={{ padding: '0px 20px' }}>
               <MultiAccordion
@@ -218,6 +319,8 @@ const CardView = ({ trades, previewPageActions, apiConfiguration, preview, cummu
                 getSingleATPSections={getSingleAtpSections}
                 handleDownloadAtpCallBack={handleDownloadAtpCallBack}
               />
+
+              {/* </MultiAccordion> */}
             </div>
             : getSingleAtpSections(selectedATPS[0])
           }
@@ -228,4 +331,118 @@ const CardView = ({ trades, previewPageActions, apiConfiguration, preview, cummu
 };
 
 const mapStateToProps = (state) => ({
-  cummulative: c
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state)
+});
+
+CardView.propTypes = {
+  trades: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    opicsId: PropTypes.string.isRequired, // Ensure opicsId is required
+  })).isRequired,
+  previewPageActions: PropTypes.shape({
+    onAccordionSelect: PropTypes.func.isRequired,
+  }).isRequired,
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
+  }),
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
+  }),
+  apiConfiguration: PropTypes.shape({})
+};
+
+export default connect(mapStateToProps)(CardView);
+this file is src\views\previewPage\card.js
+==================
+
+import { fetchWrapper, getUUID } from 'uds-utils';
+import {
+  onAccordionSelectSuccess,
+  tradeIdSuccess,
+  previewPageRouteSuccess,
+  previewPageLoadSuccess,
+  downloadeAtp
+} from './actions';
+
+import { API_NAME, STATUS_CODES, ERROR_MESSAGES } from '../../common/constants/constants';
+import { fetchIt, getConfig, getURL } from '../../common/utils/actionHelper';
+import endpoints from '../../apis/endpoints';
+
+export const onAccordionSelect = (accordionIndex) => (dispatch) =>
+  dispatch(onAccordionSelectSuccess(accordionIndex));
+
+export const tradeIdSelect = (tradeIdd) => (dispatch) =>
+  dispatch(tradeIdSuccess(tradeIdd));
+
+export const routeFrom = (routedFrom) => (dispatch) =>
+  dispatch(previewPageRouteSuccess(routedFrom));
+
+export const handlePreviewLoadSuccess = (data, dispatch) => {
+  // console.log(data, "disptachhh")
+  dispatch(previewPageLoadSuccess(data));
+};
+
+export const fetchPreviewPageData = (configuration, tradeId, opicsId) => {
+  return function a(dispatch) {
+    const url = getURL(configuration, API_NAME.LOADPREVIEW, endpoints);
+    const config = getConfig(configuration, getUUID);
+    config.method = 'POST';
+    config.body = JSON.stringify({ tradeId, opicsId });
+    const args = {
+      fetchWrapper,
+      url,
+      config,
+      successCallback: (data) => handlePreviewLoadSuccess(data, dispatch),
+      dispatch,
+    };
+    return fetchIt(args);
+  };
+};
+
+export const fetchAndDownloadPDF = async (url, filename, options = {}) => {
+  try {
+    const response = await fetch(url, options);
+    if (response.status !== STATUS_CODES.SUCCESS) {
+      throw new Error(`${ERROR_MESSAGES.NETWORK_ERROR}: ${response.status} ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error(`${ERROR_MESSAGES.FETCH_ERROR}: ${error}`);
+  }
+};
+
+export const onDownloadeAtp = (configuration, filename, data) => async (dispatch) => {
+  dispatch(downloadeAtp(filename, data));
+
+  try {
+    const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
+
+    // Send data to server and fetch generated PDF
+    await fetchAndDownloadPDF(
+      url,
+      `${filename}.pdf`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      }
+    );
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to download ATP:', error);
+  };
+};
+this is src\actions\previewPage\creators.js
