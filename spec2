@@ -1,157 +1,85 @@
-{trades: [{opicsId: "25890"}], totalNoOfAtps: 2,…}
-atps
-: 
-[{atpId: null, referenceDocId: null, name: "ATP 1",…},…]
-0
-: 
-{atpId: null, referenceDocId: null, name: "ATP 1",…}
-atpId
-: 
-null
-details
-: 
-{companyName: "Ankuding Inc", fxToBePurchased: "43.00", fxToBePurchasedCurrency: "USD",…}
-address
-: 
-"aaaaaaaaaaaaaaa"
-buyAmount
-: 
-"50,000.23"
-buyCurrency
-: 
-"USD"
-companyName
-: 
-"Ankuding Inc"
-contactInfo
-: 
-"aaaaaaaaaaaaaaa"
-fxToBePurchased
-: 
-"43.00"
-fxToBePurchasedCurrency
-: 
-"USD"
-governmentId
-: 
-"aaaaaaaaaaaaaaaaaaa"
-residency
-: 
-"Resident"
-taxIdentificationNo
-: 
-"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-fxDisposition
-: 
-{type: "For Credit to FCDU Account", accountOwner: "111111111111111", accountNo: "111111111111111",…}
-accountNo
-: 
-"111111111111111"
-accountOwner
-: 
-"111111111111111"
-depository
-: 
-"1111111111111"
-eventualRemittance
-: 
-"11111111111111111111111111111111111111111"
-type
-: 
-"For Credit to FCDU Account"
-intendedBeneficiary
-: 
-{name: "111111111111", address: "1111111111111111"}
-address
-: 
-"1111111111111111"
-name
-: 
-"111111111111"
-name
-: 
-"ATP 1"
-purpose
-: 
-{purposeCategory: "Foreign loans /borrowings", totalFXPurchased: null, debtAccount: "11111111111111",…}
-referenceDocId
-: 
-null
-1
-: 
-{atpId: null, referenceDocId: null, name: "ATP 2",…}
-atpId
-: 
-null
-details
-: 
-{companyName: "Ankuding Inc", fxToBePurchased: "43.00", fxToBePurchasedCurrency: "USD",…}
-address
-: 
-"aaaaaaaaaaaaaaa"
-buyAmount
-: 
-"43.00"
-buyCurrency
-: 
-"USD"
-companyName
-: 
-"Ankuding Inc"
-contactInfo
-: 
-"aaaaaaaaaaaaaaa"
-fxToBePurchased
-: 
-"43.00"
-fxToBePurchasedCurrency
-: 
-"USD"
-governmentId
-: 
-"aaaaaaaaaaaaaaaaaaa"
-residency
-: 
-"Resident"
-taxIdentificationNo
-: 
-"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-fxDisposition
-: 
-{type: "For Credit to FCDU Account", accountOwner: "222222222222222222222",…}
-accountNo
-: 
-"22222222222222"
-accountOwner
-: 
-"222222222222222222222"
-depository
-: 
-"2222222222222"
-eventualRemittance
-: 
-"2222222222222222222"
-type
-: 
-"For Credit to FCDU Account"
-intendedBeneficiary
-: 
-{name: "222222222222222222222", address: "2222222222222"}
-address
-: 
-"2222222222222"
-name
-: 
-"222222222222222222222"
-name
-: 
-"ATP 2"
-purpose
-: 
-{purposeCategory: "Foreign loans /borrowings", totalFXPurchased: null, debtAccount: "2222222222222222",…}
-referenceDocId
-: 
-null
-totalNoOfAtps
-: 
-2
+import { Accordion, Button } from 'uds-core';
+import PropTypes from 'prop-types';
+import { connect } from 'react-redux';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import { previewPageDataSelector } from '../../selectors/previewPage';
+import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
+
+const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+// const selectedATPS = preview.previewRoutedFrom === "ATP-Page" ? cummulative : cummulative
+  const callEachAtp = (atp) => (
+    getSingleATPSections(atp)
+  );
+
+  const handleDownloadATPCallback = (e, atp) => {
+    e.stopPropagation();
+    // Pass the ATP object or its necessary fields
+    handleDownloadAtpCallBack(atp.name);
+  };
+
+  const multiAtpLabel = (atp) => {
+    return (
+      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
+          <span>{atp.name}</span> {/* Display the ATP name */}
+        </AccordionCol>
+        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
+          <Button
+            data-testid="button-submit"
+            variant="small"
+            buttonType="link"
+            onClick={(e) => handleDownloadATPCallback(e, atp)} // Pass the ATP object when clicking
+            leftIconName="ic_download"
+          >
+            Download ATP222
+          </Button>
+        </AccordionCol>
+      </AccordionRow>
+    );
+};
+  return (
+    <MultiAtpLabelStyle>
+      <Accordion
+        theme="blue"
+        variant="contained"
+        iconPosition="left"
+        isSingleOpen={isSingleOpen}
+        icons={icons}
+        selectedSections={handleSelectedSections}
+        defaultCheckedSections={[0]}
+      >
+        {selectedATPS ? (
+          selectedATPS.map((atp) => (
+            <AccordionTitle key={atp.name} label={multiAtpLabel(atp)}>
+              {callEachAtp(atp)}
+            </AccordionTitle>
+          ))
+        ) : (
+          ''
+        )}
+      </Accordion>
+    </MultiAtpLabelStyle>
+  );
+};
+
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state)
+});
+MultiAccordion.propTypes = {
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
+  }),
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
+  }),
+  icons: PropTypes.bool,
+  isSingleOpen: PropTypes.bool,
+  handleSelectedSections: PropTypes.func,
+  getSingleATPSections: PropTypes.func,
+  handleDownloadAtpCallBack: PropTypes.func.isRequired, // callback is required
+};
+
+export default connect(mapStateToProps)(MultiAccordion);
