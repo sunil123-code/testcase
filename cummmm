@@ -1,152 +1,97 @@
-export const handleDownloadATP = (configuration, trades, cumulative, preview, atpName, dispatch) => {
-  if (!trades || trades.length === 0) {
-    console.error("No trades provided for ATP download.");
-    return;
-  }
+import { Accordion, Button } from 'uds-core';
+import PropTypes from 'prop-types';
+import { connect } from 'react-redux';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import { previewPageDataSelector } from '../../selectors/previewPage';
+import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
 
-  const filename = generateFilename(trades, cumulative, preview);
-  const selectedATPS = cumulative?.atps?.length > 0 ? cumulative?.atps : preview?.atpsCollective;
+const MultiAccordion = ({
+  isSingleOpen,
+  icons,
+  handleSelectedSections,
+  cummulative,
+  preview,
+  getSingleATPSections,
+  handleDownloadAtpCallBack,
+}) => {
+  // Determine which ATPs to display based on the route or page context
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
 
-  // Filter the data based on the specific ATP name
-  const selectedAtpData = selectedATPS.find(atp => atp.name === atpName);
+  // Render ATP details section for each ATP
+  const callEachAtp = (atp) => getSingleATPSections(atp);
 
-  if (!selectedAtpData) {
-    console.error(`ATP with name ${atpName} not found.`);
-    return;
-  }
-
-  const atpData = {
-    trades: trades.map(trade => ({ opicsId: trade.opicsId })),
-    totalNoOfAtps: 1, // We are downloading only one ATP at a time
-    atps: [{
-      atpId: selectedAtpData.atpId || null,
-      referenceDocId: selectedAtpData.referenceDocId || null,
-      name: selectedAtpData.name || 'ATP',
-      details: { ...selectedAtpData.details },
-      purpose: { ...selectedAtpData.purpose },
-      fxDisposition: { ...selectedAtpData.fxDisposition },
-      intendedBeneficiary: { ...selectedAtpData.intendedBeneficiary },
-    }]
+  // Handle download button click
+  const handleDownloadATPCallback = (e, atp) => {
+    e.stopPropagation();
+    // Call the provided callback and pass the relevant ATP data (here we use 'atp.name' or 'atp.id')
+    handleDownloadAtpCallBack(atp); // Pass the entire ATP object or only necessary fields
   };
 
-  atpData.atps.forEach(atp => {
-    delete atp.details?.sumOfBuyAmounts;
-    delete atp.supportingDocs;
-  });
-
-  const processedPayload = preparePayload(atpData);
-  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
-
-  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
-};
-
-
-=========================
-
-const handleDownloadAtpCallBack = useCallback((atpName) => {
-  handleDownloadATP(apiConfiguration, trades, cumulative, preview, atpName, dispatch);
-}, [apiConfiguration, trades, cumulative, preview, dispatch]);
-
-const getSingleAtpSections = (ATP) => (
-  <div style={{ padding: '0px 20px' }}>
-    <FxDetails details={ATP?.details} />
-    <PurposeForm atps={ATP?.purpose} details={ATP?.details} />
-    <FxDisposition fxDisposition={ATP?.fxDisposition} />
-    <IntendedBeneficiary intendedBeneficiary={ATP?.intendedBeneficiary} />
-    <SupportForm supportingDocs={ATP?.supportingDocs} />
-  </div>
-);
-
-const CardView = ({ trades, previewPageActions, apiConfiguration, preview, cumulative }) => {
-  const dispatch = useDispatch();
-
-  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cumulative?.atps : preview?.atpsCollective;
-
-  useEffect(() => {
-    if (trades.length === 1) {
-      previewPageActions.onAccordionSelect(0);
-    } else {
-      previewPageActions.onAccordionSelect('');
-    }
-    return () => {
-      previewPageActions.onAccordionSelect(0);
-    };
-  }, [trades.length, previewPageActions]);
-
-  const handleDownloadAtpCallBack = useCallback((atpName) => {
-    handleDownloadATP(apiConfiguration, trades, cumulative, preview, atpName, dispatch);
-  }, [apiConfiguration, trades, cumulative, preview, dispatch]);
-
-  const header1 = {
-    cardNumber: 1,
-    title: <PreviewHeading>Transaction Details</PreviewHeading>,
+  // Render the label and download button for each ATP
+  const multiAtpLabel = (atp) => {
+    return (
+      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
+          <span>{atp.name}</span> {/* Display the ATP name */}
+        </AccordionCol>
+        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
+          <Button
+            data-testid="button-submit"
+            variant="small"
+            buttonType="link"
+            onClick={(e) => handleDownloadATPCallback(e, atp)} // Pass the ATP object when clicking
+            leftIconName="ic_download"
+          >
+            Download ATP
+          </Button>
+        </AccordionCol>
+      </AccordionRow>
+    );
   };
-
-  const header2 = {
-    cardNumber: 2,
-    title: (
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-        <div><PreviewHeading>Purchase Application</PreviewHeading></div>
-        {
-          selectedATPS?.length <= 1 && <div>
-            <Button
-              data-testid="button-submit"
-              variant="small"
-              buttonType="link"
-              onClick={() => handleDownloadAtpCallBack('ATP 1')} // Example for 'ATP 1'
-              leftIconName="ic_download"
-            >
-              Download ATP
-            </Button>
-          </div>
-        }
-      </div>
-    ),
-  };
-
-  const isSingleOpen = true;
-  const icons = { close: 'ic_chevron_down', open: 'ic_chevron_right' };
 
   return (
-    <>
-      <Card header={header1}>
-        <Accordion
-          isSingleOpen={isSingleOpen}
-          icons={icons}
-          handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
-          defaultCheckedSections={[0]}
-          trades={trades}
-          label="ATP1"
-        />
-      </Card>
-
-      <div style={{ marginTop: '-50px' }}>
-        <Card header={header2}>
-          {selectedATPS?.length > 1 ? (
-            <div style={{ padding: '0px 20px' }}>
-              <MultiAccordion
-                isSingleOpen={isSingleOpen}
-                icons={icons}
-                handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
-                getSingleATPSections={getSingleAtpSections}
-                handleDownloadAtpCallBack={handleDownloadAtpCallBack}
-              />
-            </div>
-          ) : (
-            getSingleAtpSections(selectedATPS[0])
-          )}
-        </Card>
-      </div>
-    </>
+    <MultiAtpLabelStyle>
+      <Accordion
+        theme="blue"
+        variant="contained"
+        iconPosition="left"
+        isSingleOpen={isSingleOpen}
+        icons={icons}
+        selectedSections={handleSelectedSections}
+        defaultCheckedSections={[0]}
+      >
+        {selectedATPS ? (
+          selectedATPS.map((atp) => (
+            <AccordionTitle key={atp.name} label={multiAtpLabel(atp)}>
+              {callEachAtp(atp)}
+            </AccordionTitle>
+          ))
+        ) : (
+          ''
+        )}
+      </Accordion>
+    </MultiAtpLabelStyle>
   );
 };
-=====================
 
-{selectedATPS?.map((atp, index) => (
-  <Button
-    key={atp.name}
-    onClick={() => handleDownloadAtpCallBack(atp.name)} // Passing the ATP name dynamically
-  >
-    Download {atp.name}
-  </Button>
-))}
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state),
+});
+
+MultiAccordion.propTypes = {
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape([{}])),
+  }),
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({})),
+  }),
+  icons: PropTypes.bool,
+  isSingleOpen: PropTypes.bool,
+  handleSelectedSections: PropTypes.func,
+  getSingleATPSections: PropTypes.func,
+  handleDownloadAtpCallBack: PropTypes.func.isRequired, // Ensure callback is required
+};
+
+export default connect(mapStateToProps)(MultiAccordion);
