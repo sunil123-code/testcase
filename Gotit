@@ -1,53 +1,231 @@
 
 
-import * as fileUtils from '../path/to/fileUtils'; // Import the module where the filename logic exists
-import { yourComponentOrFunction } from './yourComponentOrFunction';
 
-// Step 1: Spy on the function or method responsible for filename generation
-jest.spyOn(fileUtils, 'generateFilename'); // Spying on the generateFilename function
+import { useEffect, useCallback } from 'react';
+import { Card, Button } from 'uds-core';
+import { connect, useDispatch } from 'react-redux';
+import PropTypes from 'prop-types';
 
-describe('Filename Generation Tests', () => {
-  const filenameReferenceNumber = 'ABC123';
-  const timestamp = '20241118';
+import Accordion from '../../components/Accordion';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import { AccordionTitle } from '../../style/common.styles';
+import { getURL } from '../../common/utils/actionHelper';
+import { API_NAME } from '../../common/constants/constants';
+import endpoints from '../../apis/endpoints';
+import { onDownloadeAtp } from '../../actions/previewPage/creators';
+import MultiAccordion from '../../components/MultiAccordion';
+import PurposeForm from './purposeForm/view';
+import SupportForm from './supportForm/view';
+import FxDetails from './fxDetails/view';
+import FxDisposition from './fxDisposition/view';
+import IntendedBeneficiary from './intendedBeneficiary/view';
+import { PreviewHeading } from './style';
+import { previewPageDataSelector } from '../../selectors/previewPage';
 
-  it('should handle Single FX linked to Multiple ATPs', () => {
-    const trades = [{ id: 1 }];
-    const cumulative = { atps: [{}, {}] };
-    const preview = { atpsCollective: [] };
+// Mocked `generateFilename` logic
+export const generateFilename = (trades, cumulative, preview, filenameReferenceNumber, timestamp) => {
+  let filename = '';
 
-    // Step 2: Mock the return value of generateFilename
-    fileUtils.generateFilename.mockReturnValue('ATP-ABC123-1-20241118'); // Mocking filename
+  // Logic for Single FX to Multi ATP
+  if (trades.length === 1 && cumulative?.atps?.length > 1) {
+    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
+  }
+  // Logic for Single FX to Single ATP
+  else if (trades.length === 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  }
+  // Logic for Multi FX to Single ATP
+  else if (trades.length > 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-MultiFX-${timestamp}`;
+  }
 
-    const filename = yourComponentOrFunction(trades, cumulative, preview, filenameReferenceNumber, timestamp);
+  // Use the preview data filename logic if there are multiple atps in the preview data
+  if (preview?.atpsCollective?.length > 1) {
+    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
+  } else if (preview?.atpsCollective?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  }
 
-    // Step 3: Assert that the filename returned is the mocked value
-    expect(filename).toBe('ATP-ABC123-1-20241118');
-    expect(fileUtils.generateFilename).toHaveBeenCalledTimes(1); // Ensure it was called
-  });
+  return filename;
+};
 
-  it('should handle Single FX linked to Single ATP', () => {
-    const trades = [{ id: 1 }];
-    const cumulative = { atps: [{}] };
-    const preview = { atpsCollective: [] };
+// Prepare payload function
+const preparePayload = (data) => {
+  const convertEmptyToNull = (obj) => {
+    const newObj = Array.isArray(obj) ? [] : {};
+    Object.keys(obj).forEach(key => {
+      if (obj[key] === '') {
+        newObj[key] = null;
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        newObj[key] = convertEmptyToNull(obj[key]);
+      } else {
+        newObj[key] = obj[key];
+      }
+    });
+    return newObj;
+  };
+  return convertEmptyToNull(data);
+};
 
-    fileUtils.generateFilename.mockReturnValue('ATP-ABC123-20241118'); // Mocking filename
+export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
+  if (!trades || trades.length === 0) {
+    return;
+  }
 
-    const filename = yourComponentOrFunction(trades, cumulative, preview, filenameReferenceNumber, timestamp);
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
 
-    expect(filename).toBe('ATP-ABC123-20241118');
-    expect(fileUtils.generateFilename).toHaveBeenCalledTimes(1); // Ensure it was called
-  });
+  const filenameReferenceNumber = preview?.atpTradeList?.[0].opicsId ?? trades?.[0]?.opicsId;
 
-  it('should handle Multiple FX linked to Single ATP', () => {
-    const trades = [{ id: 1 }, { id: 2 }];
-    const cumulative = { atps: [{}] };
-    const preview = { atpsCollective: [] };
+  // Generate filename using the new method
+  const filename = generateFilename(trades, cumulative, preview, filenameReferenceNumber, timestamp);
 
-    fileUtils.generateFilename.mockReturnValue('ATP-MultiFX-20241118'); // Mocking filename
+  let atpTradeList = [];
+  let totalAtps = 0;
+  let atp = {};
 
-    const filename = yourComponentOrFunction(trades, cumulative, preview, filenameReferenceNumber, timestamp);
+  if (cumulative?.atps?.[0]?.details?.companyName) {
+    atpTradeList = trades;
+  } else {
+    atpTradeList = preview.tradesCollective;
+  }
 
-    expect(filename).toBe('ATP-MultiFX-20241118');
-    expect(fileUtils.generateFilename).toHaveBeenCalledTimes(1); // Ensure it was called
-  });
-});
+  if (cumulative?.atps?.[0]?.details?.companyName) {
+    atp = cumulative.atps[0];
+    totalAtps = cumulative.atps.length;
+  } else {
+    atp = typeof label === 'object' ? preview?.atpsCollective?.[0] : preview?.atpsCollective.filter(item => item.name === label)[0];
+    totalAtps = preview?.atpsCollective?.length;
+  }
+
+  const atpData = {
+    trades: atpTradeList.map(trade => ({ opicsId: trade.opicsId })),
+    totalNoOfAtps: totalAtps,
+    atps: [{
+      atpId: cumulative?.atps?.[0]?.details?.companyName ? null : atp?.atpId,
+      referenceDocId: atp?.referenceDocId || null,
+      name: atp?.name || 'ATP 1',
+      details: { ...atp?.details, contactInfo: atp?.details?.contactInfo },
+      purpose: { ...atp?.purpose, principle: atp?.purpose?.principle },
+      fxDisposition: { ...atp?.fxDisposition, eventualRemittance: atp?.fxDisposition?.eventualRemittance },
+      intendedBeneficiary: atp?.intendedBeneficiary,
+    }],
+  };
+
+  delete atpData.atps[0]?.details?.sumOfBuyAmounts;
+  delete atpData.atps[0]?.supportingDocs;
+
+  const processedPayload = preparePayload(atpData);
+
+  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
+  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
+};
+
+export const handleSelectedSections = (sections, previewPageActions, trades) => {
+  if (trades.length === 1) {
+    previewPageActions.onAccordionSelect(0);
+  } else {
+    previewPageActions.onAccordionSelect(sections[0]);
+  }
+};
+
+const getSingleAtpSections = (ATP) => {
+  return (
+    <div style={{ padding: '0px 20px' }}>
+      <FxDetails details={ATP?.details} />
+      <PurposeForm atps={ATP?.purpose} details={ATP?.details} />
+      <FxDisposition fxDisposition={ATP?.fxDisposition} />
+      <IntendedBeneficiary intendedBeneficiary={ATP?.intendedBeneficiary} />
+      <SupportForm supportingDocs={ATP?.supportingDocs} />
+    </div>
+  );
+};
+
+const CardView = ({ trades, previewPageActions, apiConfiguration, preview, cummulative }) => {
+  const dispatch = useDispatch();
+
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+
+  useEffect(() => {
+    if (trades.length === 1) {
+      previewPageActions.onAccordionSelect(0);
+    } else {
+      previewPageActions.onAccordionSelect('');
+    }
+    return () => {
+      previewPageActions.onAccordionSelect(0);
+    };
+  }, [trades.length, previewPageActions]);
+
+  const handleDownloadAtpCallBack = useCallback((label) => {
+    handleDownloadATP(apiConfiguration, trades, cummulative, preview, label, dispatch);
+  }, [apiConfiguration, trades, cummulative, preview, dispatch]);
+
+  const header1 = {
+    cardNumber: 1,
+    title: <PreviewHeading>Transaction Details</PreviewHeading>,
+  };
+
+  const header2 = {
+    cardNumber: 2,
+    title: (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div><PreviewHeading>Purchase Application</PreviewHeading></div>
+        {
+          selectedATPS?.length <= 1 && <div>
+            <Button
+              data-testid="button-submit"
+              variant="small"
+              buttonType="link"
+              onClick={handleDownloadAtpCallBack}
+              leftIconName="ic_download"
+            >
+              Download ATP
+            </Button>
+          </div>
+        }
+      </div>
+    ),
+  };
+
+  const isSingleOpen = true;
+  const icons = { close: 'ic_chevron_down', open: 'ic_chevron_right' };
+
+  return (
+    <>
+      <Card header={header1}>
+        <AccordionTitle>
+          <Accordion
+            isSingleOpen={isSingleOpen}
+            icons={icons}
+            handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
+            defaultCheckedSections={[0]}
+            trades={trades}
+            label="ATP1"
+          />
+        </AccordionTitle>
+      </Card>
+
+      <div style={{ marginTop: '-50px' }}>
+        <Card header={header2}>
+          {selectedATPS?.length > 1 ?
+            <div style={{ padding: '0px 20px' }}>
+              <MultiAccordion
+                isSingleOpen={isSingleOpen}
+                icons={icons}
+                handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
+                defaultCheckedSections={[0]}
+                getSingleATPSections={getSingleAtpSections}
+                handleDownloadAtpCallBack={handleDownloadAtpCallBack}
+              />
+            </div>
+            : getSingleAtpSections(selectedATPS[0])
+          }
+        </Card>
+      </div>
+    </>
+  );
+};
+
+const mapStateToProps = (state) => ({
+  cummulative: c
