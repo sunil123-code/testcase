@@ -1,66 +1,60 @@
-describe('Download ATP - Filename Logic', () => {
-  let trades, cumulative, preview, filenameReferenceNumber, timestamp;
+describe('Filename Generation Tests', () => {
+  const filenameReferenceNumber = 'ABC123';
+  const timestamp = '20241118';
 
-  beforeEach(() => {
-    filenameReferenceNumber = 'ABC123'; // Mock reference number
-    timestamp = '20241118'; // Mock timestamp
+  // Mock the main function
+  const mainFunction = (trades, cumulative, preview) => {
+    // Call the existing generateFilename function (assumed imported)
+    return generateFilename(trades, cumulative, preview, filenameReferenceNumber, timestamp);
+  };
+
+  it('should handle Single FX linked to Multiple ATPs', () => {
+    const trades = [{ id: 1 }];
+    const cumulative = { atps: [{}, {}] };
+    const preview = { atpsCollective: [] };
+
+    const filename = mainFunction(trades, cumulative, preview);
+
+    expect(filename).toBe('ATP-ABC123-1-20241118');
   });
 
-  it('should generate filename for Single FX to Multi ATPs', () => {
-    trades = [{ id: 1 }];
-    cumulative = { atps: [{}, {}] }; // Multiple ATPs
-    let filename = '';
+  it('should handle preview data with Multiple ATPs', () => {
+    const trades = [];
+    const cumulative = {};
+    const preview = { atpsCollective: [{}, {}] };
 
-    if (trades.length === 1 && cumulative?.atps?.length > 1) {
-      filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
-    }
+    const filename = mainFunction(trades, cumulative, preview);
 
-    expect(filename).toBe(`ATP-ABC123-1-20241118`);
+    expect(filename).toBe('ATP-ABC123-1-20241118');
   });
 
-  it('should generate filename for Single FX to Single ATP', () => {
-    trades = [{ id: 1 }];
-    cumulative = { atps: [{}] }; // Single ATP
-    let filename = '';
+  it('should handle Single FX linked to Single ATP', () => {
+    const trades = [{ id: 1 }];
+    const cumulative = { atps: [{}] };
+    const preview = { atpsCollective: [] };
 
-    if (trades.length === 1 && cumulative?.atps?.length === 1) {
-      filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
-    }
+    const filename = mainFunction(trades, cumulative, preview);
 
-    expect(filename).toBe(`ATP-ABC123-20241118`);
+    expect(filename).toBe('ATP-ABC123-20241118');
   });
 
-  it('should generate filename for Multi FX to Single ATP', () => {
-    trades = [{ id: 1 }, { id: 2 }];
-    cumulative = { atps: [{}] }; // Single ATP
-    let filename = '';
+  it('should handle Multiple FX linked to Single ATP', () => {
+    const trades = [{ id: 1 }, { id: 2 }];
+    const cumulative = { atps: [{}] };
+    const preview = { atpsCollective: [] };
 
-    if (trades.length > 1 && cumulative?.atps?.length === 1) {
-      filename = `ATP-MultiFX-${timestamp}`;
-    }
+    const filename = mainFunction(trades, cumulative, preview);
 
-    expect(filename).toBe(`ATP-MultiFX-20241118`);
+    expect(filename).toBe('ATP-MultiFX-20241118');
   });
 
-  it('should generate filename for preview data with multiple ATPs', () => {
-    preview = { atpsCollective: [{}, {}] }; // Multiple ATPs
-    let filename = '';
+  it('should handle preview data with Single ATP', () => {
+    const trades = [];
+    const cumulative = {};
+    const preview = { atpsCollective: [{}] };
 
-    if (preview?.atpsCollective?.length > 1) {
-      filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
-    }
+    const filename = mainFunction(trades, cumulative, preview);
 
-    expect(filename).toBe(`ATP-ABC123-1-20241118`);
-  });
-
-  it('should generate filename for preview data with single ATP', () => {
-    preview = { atpsCollective: [{}] }; // Single ATP
-    let filename = '';
-
-    if (preview?.atpsCollective?.length === 1) {
-      filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
-    }
-
-    expect(filename).toBe(`ATP-ABC123-20241118`);
+    expect(filename).toBe('ATP-ABC123-20241118');
   });
 });
