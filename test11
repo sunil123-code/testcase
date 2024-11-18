@@ -1,566 +1,79 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-
-import { Provider } from 'react-redux';
-import configureMockStore from 'redux-mock-store';
-import { thunk } from 'redux-thunk';
-import { HashRouter } from 'react-router-dom';
-
-import '@testing-library/jest-dom';
-import * as linkDocumentSelectors from '../../../selectors/linkDocument';
-import { previewPageDataSelector } from '../../../selectors/previewPage';
-import { requiresPOUSelector } from '../../../selectors/requiresPOU';
-import { atpDetailsFormValuesSelector, companyDetailsSelector } from '../../../selectors/atpDetailsForm';
-import { handleSelectedSections } from '../card';
-import { onDownloadeAtp } from '../../../actions/previewPage/creators';
-
-import { KEY } from '../../../reducers';
-import PreviewPage from '../index';
-import { declineATPValuesSelector } from '../../../selectors/declineATP';
-
-jest.mock('../../../selectors/linkDocument/');
-jest.mock('../../../selectors/atpDetailsForm');
-jest.mock('../../../selectors/requiresPOU');
-jest.mock('../../../selectors/atpDetailsForm');
-jest.mock('../../../selectors/previewPage'); jest.mock('../../../selectors/declineATP');
-jest.mock('../../../actions/previewPage/creators', () => ({
-  onDownloadeAtp: jest.fn(),
-}));
-
-const mockApiConfiguration = {
-  url: '',
-  headers: { userId: 'userId', groupId: 'groupId' },
-  appVersionMap: { ssi: 's2b' },
-};
-const mockProps = {
-  apiConfiguration: mockApiConfiguration,
-  previewPageActions: {
-    onAccordionSelect: jest.fn()
-  },
-  submitATPactions: {
-    submitNewATP: jest.fn(),
-  },
-  onConfirmDiscard: jest.fn(),
-  onSubmit: jest.fn(),
-  onDescriptionSubmit: jest.fn(),
-  // isModalOpen: true,
-  isDeclineOpen: true,
-  setSelectedPage: '',
-  isApproveToast: false,
-  approveAtpContent: {
-    isApproveToastOpen: false,
-    isApproveSuccess: false,
-    isApproveError: false,
-    toastMsg: ''
+export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
+  if (!trades || trades.length === 0) {
+    console.error("No trades available to process ATP download.");
+    return;
   }
+
+  const filename = generateFilename(trades, cumulative, preview);
+  let atpData = {};
+
+  // Filter the ATP data based on the label (ATP name)
+  const selectedAtp = cumulative?.atps?.find(atp => atp.name === label) ||
+                      preview?.atpsCollective?.find(atp => atp.name === label);
+
+  if (selectedAtp) {
+    atpData = {
+      trades: trades.map(trade => ({ opicsId: trade.opicsId })),
+      totalNoOfAtps: 1,
+      atps: [{
+        atpId: selectedAtp?.atpId || null,
+        referenceDocId: selectedAtp?.referenceDocId || null,
+        name: selectedAtp?.name || 'ATP',
+        details: { ...selectedAtp.details },
+        purpose: { ...selectedAtp.purpose },
+        fxDisposition: { ...selectedAtp.fxDisposition },
+        intendedBeneficiary: selectedAtp?.intendedBeneficiary,
+      }]
+    };
+  } else {
+    console.error("No ATP data found for the specified label.");
+    return;
+  }
+
+  // Clean the payload by removing unnecessary fields
+  atpData.atps.forEach(atp => {
+    delete atp.details?.sumOfBuyAmounts;
+    delete atp.supportingDocs;
+  });
+
+  // Convert empty strings to null in the payload
+  const processedPayload = preparePayload(atpData);
+
+  // Generate the download URL
+  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
+
+  // Dispatch the processed payload with the constructed filename
+  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
 };
-describe('Link Documents Component', () => {
-  const middlewares = [thunk];
-  const mockStore = configureMockStore(middlewares);
-  let mockProps;
-  let store;
-    beforeEach(() => {
-        const mockedTrades = [
-      {
-        opicsId: 25890,
-        clientName: 'Ankuding Inc',
-        tradeDate: '2024-06-27',
-        valueDate: '2024-06-27',
-        buySell: 'BUY',
-        buyAmount: '100',
-        sellAmount: '2664.24',
-        sellCurrency: 'PHP',
-        buyCurrency: 'USD',
-        atpLinkingStatus: 'Pending Linkage',
-        actions: [
-          'create-new-atp',
-          'repair-atp',
-          'view-details',
-          'approve/decline',
-        ],
-      },
-      {
-        opicsId: 258901,
-        clientName: 'Ankuding Inc',
-        tradeDate: '2024-06-27',
-        valueDate: '2024-06-27',
-        buySell: 'BUY',
-        buyAmount: '100',
-        sellAmount: '2664555.233',
-        sellCurrency: 'PHP',
-        buyCurrency: 'USD',
-        atpLinkingStatus: 'Pending Linkage',
-        statusDetails: {
-          pendingCount: 0,
-          completedCount: 0,
-          declinedCount: 0,
-          processingCount: 0,
-          allCount: 0,
-        },
-        actions: ['create-new-atp'],
-      },
-    ];
-    const tradeData = {
-      purposeCategory: 'Non-Trade Current Account Transaction',
-      isRequirePOU: true
-    };
-    const mockedDetails = {
-      companyName: '',
-      address: '',
-      amount: '',
-      contactInfo: '',
-      residency: '',
-      taxId: '',
-      validGovtId: '',
-      buyAmount: '',
-      purpose: {
-        purposeCategory: 'test',
-        totalFXPurchased: null,
-        debtAccount: null,
-        purpose: null,
-        paymentType: null,
-        principle: null,
-        interest: null,
-        fees: null,
-        securityType: null,
-      },
-    };
-    const mockedCompany = {};
-    const mockedPreview = {
-      previewRoutedFrom: 'ATP-Page',
-      tradesCollective: [{
-        'opicsId': 25890,
-        'clientName': 'Ankuding Inc',
-        'companyEntity': '1234',
-        'tradeDate': '2024-06-27',
-        'valueDate': '2024-06-27',
-        'buySell': 'BUY',
-        'buyAmount': '50,043.23',
-        'sellAmount': '2664.24',
-        'sellCurrency': 'PHP',
-        'buyCurrency': 'USD',
-        'atpLinkingStatus': 'Pending Linkage',
-        actions: ['create-new-atp', 'repair-atp', 'view-details', 'approve/decline'],
-      },
-      {
-        'opicsId': 258901,
-        'clientName': 'Ankuding Inc',
-        'companyEntity': '1234',
-        'tradeDate': '2024-06-27',
-        'valueDate': '2024-06-27',
-        'buySell': 'BUY',
-        'buyAmount': '49,956.77',
-        'sellAmount': '2664555.233',
-        'sellCurrency': 'PHP',
-        'buyCurrency': 'USD',
-        'atpLinkingStatus': 'Pending Linkage',
-        'statusDetails': {
-          'pendingCount': 0,
-          'completedCount': 0,
-          'declinedCount': 0,
-          'processingCount': 0,
-          'allCount': 0
-        },
-        actions: ['create-new-atp'],
-      }],
-      atpsCollective: [
-        {
-          referenecDocId: null,
-          name: 'ATP 1',
-          details: {
-            companyName: 'ABC CORP',
-            fxToBePurchased: 5000,
-            fxToBePurchasedCurrency: 'USD',
-            address: '123 STREET',
-            contactInfo: 'ABC@abc.com',
-            taxIdentificationNo: 'ABC123',
-            governmentId: 'ABC12345',
-            residency: 'Resident'
-          },
-          purpose: {
-            purposeCategory: 'Foreign loans /borrowings',
-            totalFXPurchased: 10000,
-            debtAccount: 'ABC123',
-            purpose: 'Owed to Non-residents (other than OBUs)',
-            paymentType: 'Regular Payment',
-            principle: 'USD 65,000',
-            interest: 'USD 5,000',
-            fees: '-',
-            securityType: '-',
-            specifiedReason: '-'
-          },
-          fxDisposition: {
-            type: 'For Credit to FCDU Account',
-            accountOwner: 'Name1',
-            accountNo: 12345678,
-            depository: '-',
-            eventualRemittance: '-'
-          },
-          intendedBeneficiary: {
-            name: '-',
-            address: '-'
-          },
-          supportingDocs: {
-            isSubmitted: null,
-            docs: null
-          },
-        }]
-    }; const mockdeclineATP = {
-      declineATP: 'Declined'
-    };
-
-    linkDocumentSelectors.tradesSelector.mockReturnValue(mockedTrades);
-    atpDetailsFormValuesSelector.mockReturnValue(mockedDetails);
-    companyDetailsSelector.mockReturnValue();
-    requiresPOUSelector.mockReturnValue(tradeData);
-    previewPageDataSelector.mockReturnValue(mockedPreview); declineATPValuesSelector.mockReturnValue(mockdeclineATP);
-
-    const initialState = {
-      [KEY]: {
-        tradeReducer: {
-          trades: mockedTrades,
-          formDetails: mockedDetails,
-          companyDetails: mockedCompany,
-          requiresPOU: tradeData,
-          preview: mockedPreview,
-          declineATP: mockdeclineATP,
-          configuration: {
-            url: '',
-            headers: {
-              userid: '',
-              groupid: '',
-            },
-            appVersionMap: {},
-
-          },
-          purposeCategories: [
-            {
-              'id': 20505,
-              'name': 'Foreign loans /borrowings'
-            },
-            {
-              'id': 20506,
-              'name': 'Inward Investments by Non-Residents'
-            },
-            {
-              'id': 20507,
-              'name': 'Outward Investments by Residents'
-            },
-            {
-              'id': 20508,
-              'name': 'Trade (payment for importations)'
-            },
-            {
-              'id': 20509,
-              'name': 'Resident to resident transactions'
-            },
-            {
-              'id': 20510,
-              'name': 'Non-trade current account transactions'
-            },
-            {
-              'id': 20511,
-              'name': 'Others'
-            }
-          ]
-        },
-      },
-    };
 
 
-    store = mockStore(initialState);
-  });
+=======================
 
-  it('should dispatch onDownloadATP with correct filename and data for multiple trades', () => {
-    const wrapper = render(
-      <Provider store={store}>
-        <HashRouter>
-          <PreviewPage {...mockProps} />
-        </HashRouter>
-      </Provider>
+
+const handleDownloadAtpCallBack = useCallback((label) => {
+    handleDownloadATP(apiConfiguration, trades, cummulative, preview, label, dispatch);
+}, [apiConfiguration, trades, cummulative, preview, dispatch]);
+
+
+=============================
+
+const multiAtpLabel = (atp) => {
+    return (
+      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
+          <span>{atp.name}</span> {/* Display the ATP name */}
+        </AccordionCol>
+        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
+          <Button
+            data-testid="button-submit"
+            variant="small"
+            buttonType="link"
+            onClick={(e) => handleDownloadATPCallback(e, atp)} // Pass the ATP object when clicking
+            leftIconName="ic_download"
+          >
+            Download ATP
+          </Button>
+        </AccordionCol>
+      </AccordionRow>
     );
-    const downloadAtp = screen.getByText(/Download ATP/i);
-    fireEvent.click(downloadAtp);
-    expect(wrapper).toMatchSnapshot();
-  });
-
-  it('should call onAccordionSelect with 0 for single trade', () => {
-    const sections = [0, 1];
-    const previewPageActions = {
-      onAccordionSelect: jest.fn()
-    };
-    const trades = [{ opicsId: '12345' }];
-
-    handleSelectedSections(sections, previewPageActions, trades);
-
-    expect(previewPageActions.onAccordionSelect).toHaveBeenCalledWith(0);
-  });
-
-  it('should call onAccordionSelect with first section for multiple trades', () => {
-    const sections = [0, 1];
-    const previewPageActions = {
-      onAccordionSelect: jest.fn()
-    };
-    const trades = [{ opicsId: '12345' }, { opicsId: '67890' }];
-
-    handleSelectedSections(sections, previewPageActions, trades);
-
-    expect(previewPageActions.onAccordionSelect).toHaveBeenCalledWith(sections[0]);
-  });
-
-  it('should match snapshot', () => {
-    const wrapper = render(
-      <HashRouter>
-        <Provider store={store}>
-          <PreviewPage {...mockProps} />
-        </Provider>
-      </HashRouter>
-    );
-    expect(wrapper).toMatchSnapshot();
-  });
-
-  it('should render with single trade', () => {
-    const mockedSingleTrade = [
-      {
-        opicsId: 25890,
-        clientName: 'Ankuding Inc',
-        tradeDate: '2024-06-27',
-        valueDate: '2024-06-27',
-        buySell: 'BUY',
-        buyAmount: '100',
-        sellAmount: '2664.24',
-        sellCurrency: 'PHP',
-        buyCurrency: 'USD',
-        atpLinkingStatus: 'Pending Linkage',
-        actions: [
-          'create-new-atp',
-          'repair-atp',
-          'view-details',
-          'approve/decline',
-        ],
-      },
-    ];
-
-    linkDocumentSelectors.tradesSelector.mockReturnValue(mockedSingleTrade);
-    const wrapper = render(
-      <HashRouter>
-        <Provider store={store}>
-          <PreviewPage {...mockProps} trades={mockedSingleTrade} />
-        </Provider>
-      </HashRouter>
-    );
-    expect(wrapper).toMatchSnapshot();
-  });
-
-  it('should open and close the modal', async () => {
-    render(
-      <Provider store={store}>
-        <HashRouter>
-          <PreviewPage {...mockProps} />
-        </HashRouter>
-      </Provider>
-    );
-
-    const openModalButton = screen.getByText(/Discard/i);
-    expect(openModalButton).toBeInTheDocument();
-
-    await userEvent.click(openModalButton);
-    const proceedButton = await screen.findByText('Proceed');
-    expect(proceedButton).toBeInTheDocument();
-    const cancelButton = await screen.findByText('Cancel');
-    expect(cancelButton).toBeInTheDocument();
-    expect(
-      await screen.queryByText(
-        'You are going to delete this ATP request. Are you sure you want to proceed?'
-      )
-    ).toBeInTheDocument();
-  });
-
-  it('should have appropriate buttons', async () => {
-    const mockedPreview2 = {
-      previewRoutedFrom: 'approve/decline',
-      tradesCollective: [{
-        'opicsId': 25890,
-        'clientName': 'Ankuding Inc',
-        'companyEntity': '1234',
-        'tradeDate': '2024-06-27',
-        'valueDate': '2024-06-27',
-        'buySell': 'BUY',
-        'buyAmount': '50,043.23',
-        'sellAmount': '2664.24',
-        'sellCurrency': 'PHP',
-        'buyCurrency': 'USD',
-        'atpLinkingStatus': 'Pending Linkage',
-        actions: ['create-new-atp', 'repair-atp', 'view-details', 'approve/decline'],
-      },
-      {
-        'opicsId': 258901,
-        'clientName': 'Ankuding Inc',
-        'companyEntity': '1234',
-        'tradeDate': '2024-06-27',
-        'valueDate': '2024-06-27',
-        'buySell': 'BUY',
-        'buyAmount': '49,956.77',
-        'sellAmount': '2664555.233',
-        'sellCurrency': 'PHP',
-        'buyCurrency': 'USD',
-        'atpLinkingStatus': 'Pending Linkage',
-        'statusDetails': {
-          'pendingCount': 0,
-          'completedCount': 0,
-          'declinedCount': 0,
-          'processingCount': 0,
-          'allCount': 0
-        },
-        actions: ['create-new-atp'],
-      }],
-      atpsCollective: [
-        {
-          referenecDocId: null,
-          name: 'ATP 1',
-          details: {
-            companyName: 'ABC CORP',
-            fxToBePurchased: 5000,
-            fxToBePurchasedCurrency: 'USD',
-            address: '123 STREET',
-            contactInfo: 'ABC@abc.com',
-            taxIdentificationNo: 'ABC123',
-            governmentId: 'ABC12345',
-            residency: 'Resident'
-          },
-          purpose: {
-            purposeCategory: 'Foreign loans /borrowings',
-            totalFXPurchased: 10000,
-            debtAccount: 'ABC123',
-            purpose: 'Owed to Non-residents (other than OBUs)',
-            paymentType: 'Regular Payment',
-            principle: 'USD 65,000',
-            interest: 'USD 5,000',
-            fees: '-',
-            securityType: '-',
-            specifiedReason: '-'
-          },
-          fxDisposition: {
-            type: 'For Credit to FCDU Account',
-            accountOwner: 'Name1',
-            accountNo: 12345678,
-            depository: '-',
-            eventualRemittance: '-'
-          },
-          intendedBeneficiary: {
-            name: '-',
-            address: '-'
-          },
-          supportingDocs: {
-            isSubmitted: null,
-            docs: null
-          },
-        }]
-    };
-
-    previewPageDataSelector.mockReturnValue(mockedPreview2);
-    render(
-      <Provider store={store}>
-        <HashRouter>
-          <PreviewPage {...mockProps} preview={mockedPreview2} />
-        </HashRouter>
-      </Provider>
-    );
-
-    const approveButton = screen.getByText(/Approve/i);
-    expect(approveButton).toBeInTheDocument();
-    const declineButton = await screen.findByText('Decline');
-    expect(declineButton).toBeInTheDocument();
-    const cancelButton = await screen.findAllByText(/Cancel/i);
-    expect(cancelButton[0]).toBeInTheDocument();
-  });
-
-  store = mockStore({
-    previewPage: {
-      previewRoutedFrom: 'ATP-Page',
-      atpsCollective: [{ name: 'ATP1', atpId: '123' }],
-    },
-    cummulative: {
-      atps: [{ details: { companyName: 'Company A' } }],
-    },
-  });
-  mockProps = {
-    trades: [{ id: 1, opicsId: '12345' }],
-    previewPageActions: {
-      onAccordionSelect: jest.fn(),
-    },
-    apiConfiguration: { api: 'mockConfig' },
-    preview: {
-      previewRoutedFrom: 'ATP-Page',
-      atpsCollective: [{ name: 'ATP1', atpId: '123' }],
-      atpTradeList: [{ opicsId: '12345' }],
-    },
-    cummulative: {
-      atps: [{ details: { companyName: 'Company A' } }],
-    },
-  };
-
-  it('should generate the correct filename when Download ATP is clicked', () => {
-    const wrapper = render(
-      <Provider store={store}>
-        <HashRouter>
-          <PreviewPage {...mockProps} />
-        </HashRouter>
-      </Provider>
-    );
-
-    const downloadAtpButton = screen.getByText(/Download ATP/i);
-    expect(downloadAtpButton).toBeInTheDocument();
-
-    fireEvent.click(downloadAtpButton);
-
-    const timestampRegex = /\d{8}\d{4}/; // Matches YYYYMMDDHHMM
-
-    expect(onDownloadeAtp).toHaveBeenCalledWith(
-      expect.any(Object), // apiConfiguration
-      expect.stringMatching(`ATP-12345-${timestampRegex.source}`), // Generated filename
-      expect.any(Object), // Payload
-      expect.any(String) // URL
-    );
-
-    // Snapshot test
-    expect(wrapper).toMatchSnapshot();
-  });
-
-  it('should handle Multi FX to Single ATP filename', () => {
-    const multiFxProps = {
-      ...mockProps,
-      trades: [
-        { id: 1, opicsId: '12345' },
-        { id: 2, opicsId: '67890' },
-      ],
-      cumulative: {
-        atps: [{ details: { companyName: 'Company A' } }],
-      },
-    };
-
-    const wrapper = render(
-      <Provider store={store}>
-        <HashRouter>
-          <PreviewPage {...multiFxProps} />
-        </HashRouter>
-      </Provider>
-    );
-
-    const downloadAtpButton = screen.getByText(/Download ATP/i);
-    fireEvent.click(downloadAtpButton);
-
-    const timestampRegex = /\d{8}\d{4}/; // Matches YYYYMMDDHHMM
-
-    expect(onDownloadeAtp).toHaveBeenCalledWith(
-      expect.any(Object), // apiConfiguration
-      expect.stringMatching(`ATP-MultiFX-${timestampRegex.source}`), // Filename for Multi FX
-      expect.any(Object), // Payload
-      expect.any(String) // URL
-    );
-
-    // Snapshot test
-    expect(wrapper).toMatchSnapshot();
-  });
-  
-});
+};
