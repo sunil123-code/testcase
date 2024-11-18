@@ -1,111 +1,151 @@
-import React, { useCallback, useEffect } from 'react';
-import { useDispatch } from 'react-redux';
-import Button from 'your-button-component'; // Import your Button component
-import Card from 'your-card-component'; // Import your Card component
-import Accordion from 'your-accordion-component'; // Import your Accordion component
-import MultiAccordion from 'your-multi-accordion-component'; // Import your MultiAccordion component
-import { handleDownloadATP } from 'path-to-your-action-creators'; // Import the handleDownloadATP action creator
+import { Accordion, Button } from 'uds-core';
+import PropTypes from 'prop-types';
+import { connect } from 'react-redux';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import { previewPageDataSelector } from '../../selectors/previewPage';
+import { AccordionRow, AccordionCol, AccordionTitle, MultiAtpLabelStyle } from '../../style/common.styles';
 
-const IndexPage = ({ trades, preview, cumulative, apiConfiguration, previewPageActions }) => {
-  const dispatch = useDispatch();
+const MultiAccordion = ({ isSingleOpen, icons, handleSelectedSections, cummulative, preview, getSingleATPSections, handleDownloadAtpCallBack }) => {
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
 
-  // Handle ATP download when the button is clicked
-  const handleDownloadAtpCallBack = useCallback((atpName) => {
-    handleDownloadATP(apiConfiguration, trades, cumulative, preview, atpName, dispatch);
-  }, [apiConfiguration, trades, cumulative, preview, dispatch]);
+  const callEachAtp = (atp) => getSingleATPSections(atp);
 
-  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cumulative?.atps : preview?.atpsCollective;
-
-  const header1 = {
-    cardNumber: 1,
-    title: <PreviewHeading>Transaction Details</PreviewHeading>,
+  const handleDownloadATPCallback = (e, atp) => {
+    e.stopPropagation();
+    // Pass the ATP object or its necessary fields
+    handleDownloadAtpCallBack(atp);
   };
 
-  const header2 = {
-    cardNumber: 2,
-    title: (
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-        <div><PreviewHeading>Purchase Application</PreviewHeading></div>
-        {
-          selectedATPS?.length <= 1 && (
-            <div>
-              <Button
-                data-testid="button-submit"
-                variant="small"
-                buttonType="link"
-                onClick={() => handleDownloadAtpCallBack('ATP 1')} // Example for 'ATP 1'
-                leftIconName="ic_download"
-              >
-                Download ATP
-              </Button>
-            </div>
-          )
-        }
-      </div>
-    ),
+  const multiAtpLabel = (atp) => {
+    return (
+      <AccordionRow style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <AccordionCol style={{ flex: '1', textAlign: 'left' }}>
+          <span>{atp.name}</span> {/* Display the ATP name */}
+        </AccordionCol>
+        <AccordionCol style={{ flex: '0', textAlign: 'right' }}>
+          <Button
+            data-testid="button-submit"
+            variant="small"
+            buttonType="link"
+            onClick={(e) => handleDownloadATPCallback(e, atp)} // Pass the ATP object on click
+            leftIconName="ic_download"
+          >
+            Download ATP
+          </Button>
+        </AccordionCol>
+      </AccordionRow>
+    );
   };
-
-  const isSingleOpen = true;
-  const icons = { close: 'ic_chevron_down', open: 'ic_chevron_right' };
 
   return (
-    <>
-      <Card header={header1}>
-        <Accordion
-          isSingleOpen={isSingleOpen}
-          icons={icons}
-          handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
-          defaultCheckedSections={[0]}
-          trades={trades}
-          label="ATP1"
-        />
-      </Card>
-
-      <div style={{ marginTop: '-50px' }}>
-        <Card header={header2}>
-          {selectedATPS?.length > 1 ? (
-            <div style={{ padding: '0px 20px' }}>
-              <MultiAccordion
-                isSingleOpen={isSingleOpen}
-                icons={icons}
-                handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
-                getSingleATPSections={(ATP) => (
-                  <div style={{ padding: '0px 20px' }}>
-                    <FxDetails details={ATP?.details} />
-                    <PurposeForm atps={ATP?.purpose} details={ATP?.details} />
-                    <FxDisposition fxDisposition={ATP?.fxDisposition} />
-                    <IntendedBeneficiary intendedBeneficiary={ATP?.intendedBeneficiary} />
-                    <SupportForm supportingDocs={ATP?.supportingDocs} />
-                  </div>
-                )}
-                handleDownloadAtpCallBack={handleDownloadAtpCallBack}
-              />
-            </div>
-          ) : (
-            // If there's only one ATP, show it without the multi-accordion
-            selectedATPS?.map((atp) => (
-              <div key={atp.name} style={{ padding: '0px 20px' }}>
-                <FxDetails details={atp?.details} />
-                <PurposeForm atps={atp?.purpose} details={atp?.details} />
-                <FxDisposition fxDisposition={atp?.fxDisposition} />
-                <IntendedBeneficiary intendedBeneficiary={atp?.intendedBeneficiary} />
-                <SupportForm supportingDocs={atp?.supportingDocs} />
-                <Button
-                  data-testid={`button-submit-${atp.name}`}
-                  variant="small"
-                  buttonType="link"
-                  onClick={() => handleDownloadAtpCallBack(atp.name)} // Pass dynamic ATP name
-                  leftIconName="ic_download"
-                >
-                  Download {atp.name}
-                </Button>
-              </div>
-            ))
-          )}
-        </Card>
-      </div>
-    </>
+    <MultiAtpLabelStyle>
+      <Accordion
+        theme="blue"
+        variant="contained"
+        iconPosition="left"
+        isSingleOpen={isSingleOpen}
+        icons={icons}
+        selectedSections={handleSelectedSections}
+        defaultCheckedSections={[0]}
+      >
+        {selectedATPS ? (
+          selectedATPS.map((atp) => (
+            <AccordionTitle key={atp.name} label={multiAtpLabel(atp)}>
+              {callEachAtp(atp)}
+            </AccordionTitle>
+          ))
+        ) : (
+          ''
+        )}
+      </Accordion>
+    </MultiAtpLabelStyle>
   );
 };
 
-export default IndexPage;
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state),
+});
+
+MultiAccordion.propTypes = {
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape([{}])),
+  }),
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({})),
+  }),
+  icons: PropTypes.bool,
+  isSingleOpen: PropTypes.bool,
+  handleSelectedSections: PropTypes.func,
+  getSingleATPSections: PropTypes.func,
+  handleDownloadAtpCallBack: PropTypes.func.isRequired, // Ensure callback is required
+};
+
+export default connect(mapStateToProps)(MultiAccordion);
+==========================
+
+
+export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
+  if (!trades || trades.length === 0) {
+    console.error("No trades available to process ATP download.");
+    return;
+  }
+
+  const filename = generateFilename(trades, cumulative, preview);
+
+  let atpData = {};
+
+  if (cumulative?.atps?.length > 0) {
+    // Use cumulative ATP data
+    atpData = {
+      trades: trades.map((trade) => ({ opicsId: trade.opicsId })),
+      totalNoOfAtps: cumulative.atps.length,
+      atps: cumulative.atps.map((atp) => ({
+        atpId: atp?.details?.atpId || null,
+        referenceDocId: atp?.referenceDocId || null,
+        name: atp?.name || 'ATP',
+        details: { ...atp.details },
+        purpose: { ...atp.purpose },
+        fxDisposition: { ...atp.fxDisposition },
+        intendedBeneficiary: { ...atp.intendedBeneficiary },
+      })),
+    };
+  } else if (preview?.atpsCollective?.length > 0) {
+    // Use preview data as fallback
+    const atp = typeof label === 'object' 
+      ? preview?.atpsCollective?.[0] 
+      : preview?.atpsCollective.find((item) => item.name === label);
+
+    atpData = {
+      trades: trades.map((trade) => ({ opicsId: trade.opicsId })),
+      totalNoOfAtps: preview?.atpsCollective?.length || 0,
+      atps: [{
+        atpId: atp?.atpId,
+        referenceDocId: atp?.referenceDocId || null,
+        name: atp?.name || 'ATP 1',
+        details: { ...atp?.details },
+        purpose: { ...atp?.purpose },
+        fxDisposition: { ...atp?.fxDisposition },
+        intendedBeneficiary: atp?.intendedBeneficiary,
+      }],
+    };
+  } else {
+    console.error("No ATP data available for download.");
+    return;
+  }
+
+  // Remove unnecessary fields before processing
+  atpData.atps.forEach((atp) => {
+    delete atp.details?.sumOfBuyAmounts;
+    delete atp.supportingDocs;
+  });
+
+  // Convert empty strings to null in the payload
+  const processedPayload = preparePayload(atpData);
+
+  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
+
+  // Dispatch the payload with the constructed filename
+  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
+};
