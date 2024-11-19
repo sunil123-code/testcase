@@ -1,30 +1,36 @@
 
-
 if (typeof label === 'string') {
-  // Filter cumulative.atps to find the one that matches the label
-  const matchedAtp = cumulative?.atps?.find(atp => atp?.name === label);
+  let matchedAtps = [];
 
-  if (matchedAtp) {
-    atpData = {
-      trades: trades.map(trade => ({ opicsId: trade.opicsId })), // Map trades with opicsId
-      totalNoOfAtps: 1, // Single ATP matched
-      atps: [
-        {
-          atpId: matchedAtp?.details?.atpId || null, // ATP ID
-          referenceDocId: matchedAtp?.referenceDocId || null, // Reference Doc ID
-          name: matchedAtp?.name || 'ATP', // ATP Name
-          details: { 
-            ...matchedAtp?.details // Include all details
-          },
-          purpose: { ...matchedAtp?.purpose }, // Include purpose
-          fxDisposition: { ...matchedAtp?.fxDisposition }, // Include FX disposition
-          intendedBeneficiary: { ...matchedAtp?.intendedBeneficiary }, // Include intended beneficiary
-          supportingDocs: matchedAtp?.supportingDocs || null // Include supporting docs if available
-        }
-      ]
-    };
+  if (cumulative?.atps?.length === 1) {
+    // If only one ATP exists in cumulative, use it directly
+    matchedAtps = cumulative.atps;
   } else {
-    console.error("No matching ATP found in cumulative.atps for the given label.");
-    return;
+    // Otherwise, filter cumulative.atps based on the label
+    const matchedAtp = cumulative?.atps?.find(atp => atp?.name === label);
+    if (matchedAtp) {
+      matchedAtps = [matchedAtp];
+    } else {
+      console.error("No matching ATP found in cumulative.atps for the given label.");
+      return;
+    }
   }
+
+  // Construct atpData with the matched ATP(s)
+  atpData = {
+    trades: trades.map(trade => ({ opicsId: trade.opicsId })), // Map trades with opicsId
+    totalNoOfAtps: matchedAtps.length, // Set the count of matched ATPs
+    atps: matchedAtps.map(atp => ({
+      atpId: atp?.details?.atpId || null, // ATP ID
+      referenceDocId: atp?.referenceDocId || null, // Reference Doc ID
+      name: atp?.name || 'ATP', // ATP Name
+      details: { 
+        ...atp?.details // Include all details
+      },
+      purpose: { ...atp?.purpose }, // Include purpose
+      fxDisposition: { ...atp?.fxDisposition }, // Include FX disposition
+      intendedBeneficiary: { ...atp?.intendedBeneficiary }, // Include intended beneficiary
+      supportingDocs: atp?.supportingDocs || null // Include supporting docs if available
+    }))
+  };
 }
