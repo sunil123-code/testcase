@@ -1,18 +1,30 @@
 
-atpData = {
-  trades: trades.map(trade => ({ opicsId: trade.opicsId })), // Map trades with opicsId
-  totalNoOfAtps: cumulative?.atps?.length || 0, // Total count of ATPs
-  atps: cumulative?.atps?.map(atp => ({
-    atpId: atp?.details?.atpId || null, // ATP ID from details
-    referenceDocId: atp?.referenceDocId || null, // Reference Doc ID
-    name: atp?.name || 'ATP', // Default name as 'ATP'
-    details: { 
-      ...atp?.details, // Include all details
-      sumOfBuyAmounts: undefined // Exclude specific field if needed
-    },
-    purpose: { ...atp?.purpose }, // Include purpose
-    fxDisposition: { ...atp?.fxDisposition }, // Include FX disposition
-    intendedBeneficiary: { ...atp?.intendedBeneficiary }, // Include intended beneficiary
-    supportingDocs: atp?.supportingDocs || null // Include supporting docs if available
-  }))
-};
+
+if (typeof label === 'string') {
+  // Filter cumulative.atps to find the one that matches the label
+  const matchedAtp = cumulative?.atps?.find(atp => atp?.name === label);
+
+  if (matchedAtp) {
+    atpData = {
+      trades: trades.map(trade => ({ opicsId: trade.opicsId })), // Map trades with opicsId
+      totalNoOfAtps: 1, // Single ATP matched
+      atps: [
+        {
+          atpId: matchedAtp?.details?.atpId || null, // ATP ID
+          referenceDocId: matchedAtp?.referenceDocId || null, // Reference Doc ID
+          name: matchedAtp?.name || 'ATP', // ATP Name
+          details: { 
+            ...matchedAtp?.details // Include all details
+          },
+          purpose: { ...matchedAtp?.purpose }, // Include purpose
+          fxDisposition: { ...matchedAtp?.fxDisposition }, // Include FX disposition
+          intendedBeneficiary: { ...matchedAtp?.intendedBeneficiary }, // Include intended beneficiary
+          supportingDocs: matchedAtp?.supportingDocs || null // Include supporting docs if available
+        }
+      ]
+    };
+  } else {
+    console.error("No matching ATP found in cumulative.atps for the given label.");
+    return;
+  }
+}
