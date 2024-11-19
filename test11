@@ -1,46 +1,73 @@
 
 
-if (typeof label === 'string') {
+export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
+  if (!trades || trades.length === 0) {
+    console.error("No trades available for ATP download.");
+    return;
+  }
+
+  // Generate the filename
+  const filename = generateFilename(trades, cumulative, preview);
+
+  let atpData = {};
   let matchedAtps = [];
 
+  // Handle case for a single ATP in cumulative
   if (cumulative?.atps?.length === 1) {
-    // If only one ATP exists in cumulative, use it directly
     matchedAtps = cumulative.atps;
-  } else if (cumulative?.atps?.length > 1) {
-    // Otherwise, filter cumulative.atps based on the label
-    const matchedAtp = cumulative?.atps?.find(atp => atp?.name === label);
+  } else if (cumulative?.atps?.length > 1 && typeof label === 'string') {
+    const matchedAtp = cumulative.atps.find(atp => atp?.name === label);
     if (matchedAtp) {
       matchedAtps = [matchedAtp];
     } else {
       console.error("No matching ATP found in cumulative.atps for the given label.");
       return;
     }
-  } else {
-    console.error("No ATPs available in cumulative.atps.");
-    return;
   }
 
+  // Build atpData
   if (matchedAtps.length > 0) {
     atpData = {
       trades: trades.map(trade => ({ opicsId: trade.opicsId })), // Map trades with opicsId
-      totalNoOfAtps: matchedAtps.length, // Set the count of matched ATPs
+      totalNoOfAtps: matchedAtps.length,
       atps: matchedAtps.map(atp => ({
-        atpId: atp?.details?.atpId || null, // ATP ID
-        referenceDocId: atp?.referenceDocId || null, // Reference Doc ID
-        name: atp?.name || 'ATP', // ATP Name
-        details: { 
-          ...atp?.details // Include all details
-        },
-        purpose: { ...atp?.purpose }, // Include purpose
-        fxDisposition: { ...atp?.fxDisposition }, // Include FX disposition
-        intendedBeneficiary: { ...atp?.intendedBeneficiary }, // Include intended beneficiary
-        supportingDocs: atp?.supportingDocs || null // Include supporting docs if available
-      }))
+        atpId: atp?.details?.atpId || null,
+        referenceDocId: atp?.referenceDocId || null,
+        name: atp?.name || 'ATP', // Default to 'ATP'
+        details: { ...atp?.details },
+        purpose: { ...atp?.purpose },
+        fxDisposition: { ...atp?.fxDisposition },
+        intendedBeneficiary: { ...atp?.intendedBeneficiary },
+      })),
+    };
+  } else if (preview?.atpsCollective?.length > 0) {
+    // Fallback to preview data
+    const atp = typeof label === 'object'
+      ? preview?.atpsCollective?.[0]
+      : preview?.atpsCollective.find(item => item.name === label);
+
+    atpData = {
+      trades: trades.map(trade => ({ opicsId: trade.opicsId })),
+      totalNoOfAtps: preview?.atpsCollective?.length || 0,
+      atps: [{
+        atpId: atp?.atpId,
+        referenceDocId: atp?.referenceDocId || null,
+        name: atp?.name || 'ATP 1',
+        details: { ...atp?.details },
+        purpose: { ...atp?.purpose },
+        fxDisposition: { ...atp?.fxDisposition },
+        intendedBeneficiary: atp?.intendedBeneficiary,
+      }],
     };
   } else {
-    console.error("Matched ATPs array is empty.");
+    console.error("No ATP data available for download.");
     return;
   }
+
+  // Remove unnecessary properties
+  atpData.atps.forEach(atp => {
+    delete atp.details?.sumOfBuyAmounts;
+  });
 
   // Convert empty strings to null in the payload
   const processedPayload = preparePayload(atpData);
@@ -50,4 +77,4 @@ if (typeof label === 'string') {
 
   // Dispatch the processed payload with the constructed filename
   dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
-}
+};
