@@ -1,4 +1,40 @@
 
+export const generateFilename = (trades, cumulative, preview, label) => {
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
+
+  const filenameReferenceNumber = preview?.atpTradeList?.[0]?.opicsId ?? trades?.[0]?.opicsId;
+
+  const extractAtpNumber = (atpName) => {
+    const match = atpName?.match(/\d+/); // Extract numbers from the ATP name
+    return match ? match[0] : '1'; // Default to '1' if no number is found
+  };
+
+  let filename = '';
+
+  if (cumulative?.atps?.length > 1) {
+    const atpName = cumulative.atps.find(atp => atp?.name === label)?.name || 'ATP';
+    const atpNumber = extractAtpNumber(atpName);
+    filename = `ATP-${filenameReferenceNumber}-${atpNumber}-${timestamp}`;
+  } else if (cumulative?.atps?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  } else if (trades.length > 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-MultiFX-${timestamp}`;
+  }
+
+  if (preview?.atpsCollective?.length > 1) {
+    const atpName = preview.atpsCollective.find(atp => atp?.name === label)?.name || 'ATP';
+    const atpNumber = extractAtpNumber(atpName);
+    filename = `ATP-${filenameReferenceNumber}-${atpNumber}-${timestamp}`;
+  } else if (preview?.atpsCollective?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  }
+
+  return filename;
+};
+
+
+22
 
 export const generateFilename = (trades, cumulative, preview, label) => {
   const now = new Date();
