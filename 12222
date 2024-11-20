@@ -1,1 +1,319 @@
-we have download atp in two page when i click on download atp in index file the full cumuative data is not going to download atp data so send it as payload to download atp
+card.js
+import { useEffect, useCallback } from 'react';
+import { Card, Button } from 'uds-core';
+import { connect, useDispatch } from 'react-redux';
+import PropTypes from 'prop-types';
+
+import Accordion from '../../components/Accordion';
+import { cummulativeSelector } from '../../selectors/cummulativeSelector';
+import {
+
+  AccordionTitle,
+} from '../../style/common.styles';
+
+import { getURL } from '../../common/utils/actionHelper';
+import { API_NAME } from '../../common/constants/constants'; // Ensure you import other necessary constants
+import endpoints from '../../apis/endpoints';
+import { onDownloadeAtp } from '../../actions/previewPage/creators';
+import MultiAccordion from '../../components/MultiAccordion';
+import PurposeForm from './purposeForm/view';
+import SupportForm from './supportForm/view';
+import FxDetails from './fxDetails/view';
+import FxDisposition from './fxDisposition/view';
+import IntendedBeneficiary from './intendedBeneficiary/view';
+import { PreviewHeading } from './style';
+import { previewPageDataSelector } from '../../selectors/previewPage';
+import { generateFilename, preparePayload, getMatchedAtps, buildAtpData } from './utils/helper';
+
+export const handleDownloadATP = (configuration, trades, cumulative, preview, label, dispatch) => {
+  if (!trades || trades.length === 0) {
+    // eslint-disable-next-line no-console
+    return;
+  }
+
+  // Use the new generateFilename method
+  const filename = generateFilename(trades, cumulative, preview);
+
+  const matchedAtps = getMatchedAtps(cumulative, label); // Use the new method here
+
+  const atpData = buildAtpData(trades, matchedAtps, preview, label ,cumulative);
+
+  // Convert empty strings to null in the payload
+  const processedPayload = preparePayload(atpData);
+
+  // Generate the download URL
+  const url = getURL(configuration, API_NAME.DOWNLOADATP, endpoints);
+
+  // Dispatch the processed payload with the constructed filename
+  dispatch(onDownloadeAtp(configuration, filename, processedPayload, url));
+};
+
+export const handleSelectedSections = (sections, previewPageActions, trades) => {
+  if (trades.length === 1) {
+    previewPageActions.onAccordionSelect(0);
+  } else {
+    previewPageActions.onAccordionSelect(sections[0]);
+  }
+};
+
+const getSingleAtpSections = (ATP) => {
+  return (
+    <div style={{ padding: '0px 20px' }}>
+      <FxDetails details={ATP?.details} />
+      <PurposeForm atps={ATP?.purpose} details={ATP?.details} />
+      <FxDisposition fxDisposition={ATP?.fxDisposition} />
+      <IntendedBeneficiary intendedBeneficiary={ATP?.intendedBeneficiary} />
+      <SupportForm supportingDocs={ATP?.supportingDocs} />
+    </div>
+  );
+};
+
+const CardView = ({ trades, previewPageActions, apiConfiguration, preview,
+  cummulative }) => {
+  const dispatch = useDispatch();
+
+  const selectedATPS = preview.previewRoutedFrom === 'ATP-Page' ? cummulative?.atps : preview?.atpsCollective;
+  useEffect(() => {
+    if (trades.length === 1) {
+      previewPageActions.onAccordionSelect(0);
+    } else {
+      previewPageActions.onAccordionSelect('');
+    }
+    return () => {
+      previewPageActions.onAccordionSelect(0);
+    };
+  }, [trades.length, previewPageActions]);
+
+  const handleDownloadAtpCallBack = useCallback((label) => {
+    handleDownloadATP(apiConfiguration, trades, cummulative, preview, label, dispatch);
+  }, [apiConfiguration, trades, cummulative, preview, dispatch]);
+
+  const header1 = {
+    cardNumber: 1,
+    title: <PreviewHeading>Transaction Details</PreviewHeading>,
+  };
+
+  const header2 = {
+    cardNumber: 2,
+    title: (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div><PreviewHeading>Purchase Application</PreviewHeading></div>
+        {
+          selectedATPS?.length <= 1 && <div>
+            <Button
+              data-testid="button-submit"
+              variant="small"
+              buttonType="link"
+              onClick={handleDownloadAtpCallBack}
+              leftIconName="ic_download"
+            >
+              Download ATP
+            </Button>
+          </div>
+        }
+      </div>
+    ),
+  };
+
+  const isSingleOpen = true;
+
+  const icons = { close: 'ic_chevron_down', open: 'ic_chevron_right' };
+
+  return (
+    <>
+      <Card header={header1}>
+
+        <AccordionTitle>
+          <Accordion
+            isSingleOpen={isSingleOpen}
+            icons={icons}
+            handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
+            defaultCheckedSections={[0]}
+            trades={trades}
+            label="ATP1"
+          />
+        </AccordionTitle>
+      </Card>
+
+      <div style={{ marginTop: '-50px' }}>
+        <Card header={header2}>
+
+          {selectedATPS?.length > 1 ?
+            <div style={{ padding: '0px 20px' }}>
+              <MultiAccordion
+                isSingleOpen={isSingleOpen}
+                icons={icons}
+                handleSelectedSections={(sections) => handleSelectedSections(sections, previewPageActions, trades)}
+                defaultCheckedSections={[0]}
+                getSingleATPSections={getSingleAtpSections}
+                handleDownloadAtpCallBack={handleDownloadAtpCallBack}
+              />
+
+              {/* </MultiAccordion> */}
+            </div>
+            : getSingleAtpSections(selectedATPS[0])
+          }
+        </Card>
+      </div>
+    </>
+  );
+};
+
+const mapStateToProps = (state) => ({
+  cummulative: cummulativeSelector(state),
+  preview: previewPageDataSelector(state)
+});
+
+CardView.propTypes = {
+  trades: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    opicsId: PropTypes.string.isRequired, // Ensure opicsId is required
+  })).isRequired,
+  previewPageActions: PropTypes.shape({
+    onAccordionSelect: PropTypes.func.isRequired,
+  }).isRequired,
+  preview: PropTypes.shape({
+    previewRoutedFrom: PropTypes.string,
+    atpsCollective: PropTypes.arrayOf(PropTypes.shape({}))
+  }),
+  cummulative: PropTypes.shape({
+    atps: PropTypes.arrayOf(PropTypes.shape([{}]))
+  }),
+  apiConfiguration: PropTypes.shape({})
+};
+
+export default connect(mapStateToProps)(CardView);
+
+
+=======================
+helper.js
+export const supportFormColumn = [{ id: 'fileName', label: 'Documents Name', width: '250px' }];
+
+export const getFormatDate = (date) => {
+  const formatter = new Intl.DateTimeFormat('en-SG', {
+    timeZone: 'Singapore',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false
+  });
+  return `${formatter.format(date)?.replace(',', '')} SGT`;
+};
+
+// New method for generating filename
+export const generateFilename = (trades, cumulative, preview) => {
+  const now = new Date();
+  const timestamp =
+    `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
+
+  const filenameReferenceNumber = preview?.atpTradeList?.[0]?.opicsId ?? trades?.[0]?.opicsId;
+
+  let filename = '';
+
+  if (trades.length === 1 && cumulative?.atps?.length > 1) {
+    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
+  } else if (trades.length === 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  } else if (trades.length > 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-MultiFX-${timestamp}`;
+  }
+
+  if (preview?.atpsCollective?.length > 1) {
+    filename = `ATP-${filenameReferenceNumber}-1-${timestamp}`;
+  } else if (preview?.atpsCollective?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  }
+
+  return filename;
+};
+
+export const preparePayload = (data) => {
+  const convertEmptyToNull = (obj) => {
+    const newObj = Array.isArray(obj) ? [] : {}; // Maintain array structure if obj is an array
+    Object.keys(obj).forEach(key => {
+      if (obj[key] === '') {
+        newObj[key] = null;
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        newObj[key] = convertEmptyToNull(obj[key]); // Recursively process nested objects
+      } else {
+        newObj[key] = obj[key];
+      }
+    });
+    return newObj;
+  };
+
+  return convertEmptyToNull(data);
+};
+
+// New method to get matched ATPs
+export const getMatchedAtps = (cumulative, label) => {
+  let matchedAtps = [];
+
+  // Handle case for a single ATP in cumulative
+  if (cumulative?.atps?.length === 1) {
+    matchedAtps = cumulative.atps;
+  } else if (cumulative?.atps?.length > 1 && typeof label === 'string') {
+    const matchedAtp = cumulative.atps.find(atp => atp?.name === label);
+    if (matchedAtp) {
+      matchedAtps = [matchedAtp];
+    } else {
+      // eslint-disable-next-line no-console
+      return []; // Early return if no ATP matched
+    }
+  }
+
+  return matchedAtps;
+};
+
+// Utility function to extract common fields from both formDataPage and viewDetailsDataPage
+export const extractCommonFields = (dataSource, isFormDataPage = false) => {
+  return {
+    // Set atpId to null if it comes from formDataPage; otherwise, use its value
+    atpId: isFormDataPage ? null : dataSource?.atpId || null,
+    referenceDocId: dataSource?.referenceDocId || null,
+    name: dataSource?.name || 'ATP', // Default to 'ATP'
+    details: { ...dataSource?.details },
+    purpose: { ...dataSource?.purpose },
+    fxDisposition: { ...dataSource?.fxDisposition },
+    intendedBeneficiary: { ...dataSource?.intendedBeneficiary },
+  };
+};
+
+
+export const buildAtpDataFromMatchedAtps = (trades, matchedAtps, cumulative) => {
+  // Ensure cumulative is defined and has atps to avoid TypeError
+  const totalAtps = cumulative?.atps?.length || 0; // Safely access cumulative.atps
+
+  return {
+    trades: trades.map(trade => ({ opicsId: trade.opicsId })), // Map trades with opicsId
+    totalNoOfAtps: totalAtps, // Use totalAtps here
+    atps: matchedAtps.map(atp => extractCommonFields(atp, true)),
+  };
+};
+
+// Function to build ATP data when falling back to viewDetailsDataPage data
+export const buildAtpDataFromViewDetails = (trades, viewDetailsDataPage, label) => {
+  const atp = typeof label === 'object'
+    ? viewDetailsDataPage?.atpsCollective?.[0]
+    : viewDetailsDataPage?.atpsCollective.find(item => item.name === label);
+
+    return {
+    trades: trades.map(trade => ({ opicsId: trade.opicsId })),
+    totalNoOfAtps: viewDetailsDataPage?.atpsCollective?.length || 0,
+    atps: [extractCommonFields(atp)], // Use extractCommonFields without changing atpId
+  };
+};
+
+// Updated buildAtpData function to use the new helper functions
+export const buildAtpData = (trades, matchedAtps, viewDetailsDataPage, label, cumulative) => {
+  if (matchedAtps.length > 0) {
+    return buildAtpDataFromMatchedAtps(trades, matchedAtps, cumulative); // Pass cumulative to the function
+  } else if (viewDetailsDataPage?.atpsCollective?.length > 0) {
+    return buildAtpDataFromViewDetails(trades, viewDetailsDataPage, label);
+  }
+
+  // Return an empty object if no data is available
+  return {};
+};
