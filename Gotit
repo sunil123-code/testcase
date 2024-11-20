@@ -8,6 +8,39 @@ export const generateFilename = (trades, cumulative, preview, label) => {
 
   let filename = '';
 
+  const getAtpName = (atps, label) => {
+    const matchedAtp = atps?.find(atp => atp?.name === label);
+    return matchedAtp?.name || 'ATP'; // Default to 'ATP' if no match
+  };
+
+  if (cumulative?.atps?.length > 1) {
+    const atpName = getAtpName(cumulative.atps, label);
+    filename = `ATP-${filenameReferenceNumber}-${atpName}-${timestamp}`;
+  } else if (cumulative?.atps?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  } else if (trades.length > 1 && cumulative?.atps?.length === 1) {
+    filename = `ATP-MultiFX-${timestamp}`;
+  }
+
+  if (preview?.atpsCollective?.length > 1) {
+    const atpName = getAtpName(preview.atpsCollective, label);
+    filename = `ATP-${filenameReferenceNumber}-${atpName}-${timestamp}`;
+  } else if (preview?.atpsCollective?.length === 1) {
+    filename = `ATP-${filenameReferenceNumber}-${timestamp}`;
+  }
+
+  return filename;
+};
+11111
+
+export const generateFilename = (trades, cumulative, preview, label) => {
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}${(`0${now.getMonth() + 1}`).slice(-2)}${(`0${now.getDate()}`).slice(-2)}${(`0${now.getHours()}`).slice(-2)}${(`0${now.getMinutes()}`).slice(-2)}`;
+
+  const filenameReferenceNumber = preview?.atpTradeList?.[0]?.opicsId ?? trades?.[0]?.opicsId;
+
+  let filename = '';
+
   if (cumulative?.atps?.length > 1) {
     // Find the ATP that matches the label
     const matchedAtp = cumulative.atps.find(atp => atp?.name === label);
